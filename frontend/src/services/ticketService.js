@@ -66,6 +66,13 @@ export async function sendAgentReply(ticketId, message) {
   return data;
 }
 
+export async function getAgentAnalytics(params = {}) {
+  const { data } = await api.get("/tickets/analytics/agent", {
+    params: cleanParams(params),
+  });
+  return data;
+}
+
 export async function getTicketReplies(ticketId) {
   const { data } = await api.get(`/replies/ticket/${ticketId}`);
   return data;

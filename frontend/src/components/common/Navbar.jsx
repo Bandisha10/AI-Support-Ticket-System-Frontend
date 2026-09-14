@@ -89,10 +89,16 @@ export default function Navbar() {
           {isAgent && (
             <>
               <Link
+                to="/agent/analytics"
+                className="hover:text-accent transition-colors"
+              >
+                Analytics
+              </Link>
+              <Link
                 to="/agent/dashboard"
                 className="hover:text-accent transition-colors"
               >
-                Queue
+                Ticket Panel
               </Link>
               <Link
                 to="/faq"
@@ -103,6 +109,7 @@ export default function Navbar() {
               </Link>
             </>
           )}
+
           {isAdmin && (
             <>
               <Link
