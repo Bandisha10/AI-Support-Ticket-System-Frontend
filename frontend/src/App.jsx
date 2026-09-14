@@ -1,10 +1,9 @@
-// frontend/src/App.jsx
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "./components/common/Toast";
 import { NotificationProvider } from "./context/NotificationContext";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Navbar from "./components/common/Navbar";
-import AdminLayout from "./components/common/AdminLayout";
+import Layout from "./components/common/Layout";
 import { useAuth } from "./hooks/useAuth";
 
 import Login from "./pages/Login";
@@ -16,6 +15,7 @@ import NewTicket from "./pages/customer/NewTicket";
 import CustomerTicketDetail from "./pages/customer/TicketDetail";
 import MyTickets from "./pages/customer/MyTickets";
 import AgentDashboard from "./pages/agent/Dashboard";
+import AgentAnalytics from "./pages/agent/Analytics";
 import TicketDetail from "./pages/agent/TicketDetail";
 import Analytics from "./pages/admin/Analytics";
 import Settings from "./pages/admin/Settings";
@@ -34,15 +34,6 @@ function AppLayout({ children }) {
 function HomeRedirect() {
   const { homeRoute } = useAuth();
   return <Navigate to={homeRoute} replace />;
-}
-
-function RoleBasedLayout({ children }) {
-  const { isAdmin } = useAuth();
-  return isAdmin ? (
-    <AdminLayout>{children}</AdminLayout>
-  ) : (
-    <AppLayout>{children}</AppLayout>
-  );
 }
 
 export default function App() {
@@ -73,7 +64,6 @@ export default function App() {
                   </AppLayout>
                 }
               />
-
               <Route
                 path="/tickets/:ticketId"
                 element={
@@ -82,7 +72,6 @@ export default function App() {
                   </AppLayout>
                 }
               />
-
               <Route
                 path="/tickets"
                 element={
@@ -100,18 +89,25 @@ export default function App() {
               <Route
                 path="/agent/dashboard"
                 element={
-                  <RoleBasedLayout>
+                  <Layout>
                     <AgentDashboard />
-                  </RoleBasedLayout>
+                  </Layout>
                 }
               />
-
+              <Route
+                path="/agent/analytics"
+                element={
+                  <Layout>
+                    <AgentAnalytics />
+                  </Layout>
+                }
+              />
               <Route
                 path="/agent/tickets/:ticketId"
                 element={
-                  <RoleBasedLayout>
+                  <Layout>
                     <TicketDetail />
-                  </RoleBasedLayout>
+                  </Layout>
                 }
               />
             </Route>
@@ -121,36 +117,33 @@ export default function App() {
               <Route
                 path="/admin/analytics"
                 element={
-                  <AdminLayout>
+                  <Layout>
                     <Analytics />
-                  </AdminLayout>
+                  </Layout>
                 }
               />
-
               <Route
                 path="/admin/settings"
                 element={
-                  <AdminLayout>
+                  <Layout>
                     <Settings />
-                  </AdminLayout>
+                  </Layout>
                 }
               />
-
               <Route
                 path="/admin/triage"
                 element={
-                  <AdminLayout>
+                  <Layout>
                     <AgentPanel />
-                  </AdminLayout>
+                  </Layout>
                 }
               />
             </Route>
 
-            {/* Fallback: send logged-in users to their home, others to login */}
+            {/* Fallback */}
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomeRedirect />} />
             </Route>
-
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </NotificationProvider>
