@@ -20,7 +20,10 @@ export default function ChangePassword() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (form.next.length < MIN_LENGTH) {
-      showToast(`New password must be at least ${MIN_LENGTH} characters`, "error");
+      showToast(
+        `New password must be at least ${MIN_LENGTH} characters`,
+        "error",
+      );
       return;
     }
     if (form.next !== form.confirm) {
@@ -35,7 +38,13 @@ export default function ChangePassword() {
     try {
       const profile = await changePassword(form.current, form.next);
       showToast("Password updated", "success");
-      navigate(profile?.role === "admin" ? "/admin/analytics" : homeRoute || "/", {
+      const dest =
+        profile?.role === "admin"
+          ? "/admin/analytics"
+          : profile?.role === "agent"
+            ? "/agent/analytics"
+            : "/tickets";
+      navigate(dest, {
         replace: true,
       });
     } catch (err) {
@@ -75,7 +84,9 @@ export default function ChangePassword() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <PasswordField
-            label={mustChangePassword ? "Temporary password" : "Current password"}
+            label={
+              mustChangePassword ? "Temporary password" : "Current password"
+            }
             value={form.current}
             onChange={set("current")}
             show={show}
@@ -141,7 +152,11 @@ function PasswordField({ label, value, onChange, show, hint }) {
           aria-label={visible ? "Hide password" : "Show password"}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
         >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {visible ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
         </button>
       </div>
       {hint && <p className="mt-1 text-[11px] text-gray-500">{hint}</p>}

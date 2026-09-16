@@ -10,17 +10,17 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ChangePassword from "./pages/ChangePassword";
+import ResetPassword from "./pages/ResetPassword";
 import FAQ from "./pages/FAQ";
 import NewTicket from "./pages/customer/NewTicket";
 import CustomerTicketDetail from "./pages/customer/TicketDetail";
 import MyTickets from "./pages/customer/MyTickets";
-import AgentDashboard from "./pages/agent/Dashboard";
+import AgentTicketPanel from "./pages/agent/TicketPanel";
 import AgentAnalytics from "./pages/agent/Analytics";
 import TicketDetail from "./pages/agent/TicketDetail";
 import Analytics from "./pages/admin/Analytics";
 import Settings from "./pages/admin/Settings";
-import AgentPanel from "./pages/admin/AgentPanel";
-import ResetPassword from "./pages/ResetPassword";
+import AdminTicketPanel from "./pages/admin/TicketPanel";
 
 function AppLayout({ children }) {
   return (
@@ -87,18 +87,18 @@ export default function App() {
               element={<ProtectedRoute allowedRoles={["agent", "admin"]} />}
             >
               <Route
-                path="/agent/dashboard"
-                element={
-                  <Layout>
-                    <AgentDashboard />
-                  </Layout>
-                }
-              />
-              <Route
                 path="/agent/analytics"
                 element={
                   <Layout>
                     <AgentAnalytics />
+                  </Layout>
+                }
+              />
+              <Route
+                path="/agent/ticket-panel"
+                element={
+                  <Layout>
+                    <AgentTicketPanel />
                   </Layout>
                 }
               />
@@ -109,6 +109,11 @@ export default function App() {
                     <TicketDetail />
                   </Layout>
                 }
+              />
+              {/* Alias for legacy /agent/dashboard */}
+              <Route
+                path="/agent/dashboard"
+                element={<Navigate to="/agent/ticket-panel" replace />}
               />
             </Route>
 
@@ -131,12 +136,17 @@ export default function App() {
                 }
               />
               <Route
-                path="/admin/triage"
+                path="/admin/ticket-panel"
                 element={
                   <Layout>
-                    <AgentPanel />
+                    <AdminTicketPanel />
                   </Layout>
                 }
+              />
+              {/* Alias for legacy /admin/triage */}
+              <Route
+                path="/admin/triage"
+                element={<Navigate to="/admin/ticket-panel" replace />}
               />
             </Route>
 
