@@ -1,4 +1,3 @@
-// frontend/src/pages/agent/Dashboard.jsx
 import { useState, useEffect, useMemo } from "react";
 import { Filter, UserCheck, Inbox, Layers } from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
@@ -6,7 +5,7 @@ import { useAuth } from "../../hooks/useAuth";
 import TicketTable from "../../components/agent/TicketTable";
 import api from "../../services/api";
 
-export default function AgentTicketPanel() {
+export default function AgentTicketPanel () {
   const { user } = useAuth();
   // Filter mode: "mine" (Assigned to Me) | "unassigned" (Dept queue) | "all_dept"
   const [panelMode, setPanelMode] = useState("mine");

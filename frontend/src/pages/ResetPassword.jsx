@@ -27,7 +27,9 @@ export default function ResetPassword() {
     if (!token) {
       setVerifying(false);
       setTokenValid(false);
-      setErrorMessage("No verification token provided. Please use the link sent to your email.");
+      setErrorMessage(
+        "No verification token provided. Please use the link sent to your email.",
+      );
       return;
     }
 
@@ -39,7 +41,9 @@ export default function ResetPassword() {
       } catch (err) {
         setTokenValid(false);
         setErrorMessage(
-          err.response?.data?.detail || "This verification link is invalid or has expired."
+          err.response?.data?.detail?.[0]?.msg ||
+            err.response?.data?.detail ||
+            "This verification link is invalid or has expired.",
         );
       } finally {
         setVerifying(false);
@@ -52,23 +56,35 @@ export default function ResetPassword() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (form.next.length < MIN_LENGTH) {
-      showToast(`New password must be at least ${MIN_LENGTH} characters`, "error");
+      showToast(
+        `New password must be at least ${MIN_LENGTH} characters`,
+        "error",
+      );
       return;
     }
     if (form.next !== form.confirm) {
-      showToast("Passwords do not match", "error");
+      showToast(
+        err.response?.data?.detail?.[0]?.msg ||
+          err.response?.data?.detail ||
+          "Could not reset password. The link may have expired.",
+        "error",
+      );
       return;
     }
 
     setSubmitting(true);
     try {
       await authService.resetPassword(token, form.next);
-      showToast("Password updated successfully! Sign in with your new password.", "success");
+      showToast(
+        "Password updated successfully! Sign in with your new password.",
+        "success",
+      );
       navigate("/login", { replace: true });
     } catch (err) {
       showToast(
-        err.response?.data?.detail || "Could not reset password. The link may have expired.",
-        "error"
+        err.response?.data?.detail ||
+          "Could not reset password. The link may have expired.",
+        "error",
       );
     } finally {
       setSubmitting(false);
@@ -96,7 +112,9 @@ export default function ResetPassword() {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
             <AlertCircle className="h-6 w-6 text-red-400" />
           </div>
-          <h1 className="text-xl font-bold text-white">Invalid or Expired Link</h1>
+          <h1 className="text-xl font-bold text-white">
+            Invalid or Expired Link
+          </h1>
           <p className="mt-2 text-sm text-gray-400">{errorMessage}</p>
           <div className="mt-6 space-y-3">
             <Link
@@ -122,7 +140,9 @@ export default function ResetPassword() {
       <div className="w-full max-w-sm rounded-2xl border border-surface-border bg-surface-card p-8">
         <h1 className="text-xl font-bold text-white">Set New Password</h1>
         {verifiedEmail && (
-          <p className="mt-1 text-xs text-accent">Resetting password for: {verifiedEmail}</p>
+          <p className="mt-1 text-xs text-accent">
+            Resetting password for: {verifiedEmail}
+          </p>
         )}
         <p className="mt-1 text-sm text-gray-400">
           Enter your new password and confirm it below.
@@ -182,7 +202,9 @@ function Field({ label, placeholder, value, onChange, visible }) {
 
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-gray-300">{label}</label>
+      <label className="mb-1.5 block text-xs font-medium text-gray-300">
+        {label}
+      </label>
       <div className="relative">
         <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
         <input

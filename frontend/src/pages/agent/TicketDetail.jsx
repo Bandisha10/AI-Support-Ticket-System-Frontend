@@ -51,7 +51,7 @@ export default function TicketDetail() {
     if (window.history?.state?.idx > 0) {
       navigate(-1);
     } else {
-      navigate(isAdmin ? "/admin/triage" : "/agent/dashboard");
+      navigate(isAdmin ? "/admin/ticket-panel" : "/agent/ticket-panel");
     }
   }
 

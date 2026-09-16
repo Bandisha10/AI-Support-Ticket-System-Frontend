@@ -21,7 +21,11 @@ export function RoleProvider({ children }) {
       isAdmin: role === ROLES.ADMIN,
       // Home route to send each role to after login
       homeRoute:
-        role === ROLES.ADMIN ? "/admin/analytics" : role === ROLES.AGENT ? "/agent/dashboard" : "/tickets",
+        role === ROLES.ADMIN
+          ? "/admin/analytics"
+          : role === ROLES.AGENT
+            ? "/agent/analytics"
+            : "/tickets",
     };
   }, [user]);
 

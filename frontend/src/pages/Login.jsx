@@ -13,7 +13,6 @@ export default function Login() {
   const [form, setForm] = useState({
     email: "",
     password: "",
-    remember: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -31,12 +30,14 @@ export default function Login() {
         user.role === "admin"
           ? "/admin/analytics"
           : user.role === "agent"
-            ? "/agent/dashboard"
+            ? "/agent/analytics"
             : "/tickets";
       navigate(dest);
     } catch (err) {
       showToast(
-        err.response?.data?.detail || "Invalid email or password",
+        err.response?.data?.detail?.[0]?.msg ||
+          err.response?.data?.detail ||
+          "Invalid email or password",
         "error",
       );
     } finally {

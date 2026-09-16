@@ -1,10 +1,9 @@
-// frontend/src/pages/admin/AgentPanel.jsx
 import { useState, useEffect } from "react";
 import { useTickets } from "../../hooks/useTickets";
 import TicketTable from "../../components/agent/TicketTable";
 import api from "../../services/api";
 
-export default function AgentPanel() {
+export default function AdminTicketPanel () {
   const [filter, setFilter] = useState("unassigned");
   // When filter is "unassigned", we ask for needs_triage.
   // When filter is "assigned", we fetch the general unresolved queue.

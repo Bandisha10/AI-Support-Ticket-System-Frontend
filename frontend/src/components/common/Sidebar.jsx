@@ -45,14 +45,14 @@ export default function Sidebar() {
     if (isAdmin) {
       return [
         { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
-        { label: "Tickets Panel", to: "/admin/triage", icon: Ticket },
+        { label: "Tickets Panel", to: "/admin/ticket-panel", icon: Ticket },
         { label: "Settings", to: "/admin/settings", icon: Settings },
       ];
     }
     if (isAgent) {
       return [
         { label: "Analytics", to: "/agent/analytics", icon: BarChart3 },
-        { label: "Ticket Panel", to: "/agent/dashboard", icon: Inbox },
+        { label: "Ticket Panel", to: "/agent/ticket-panel", icon: Inbox },
       ];
     }
     return [];

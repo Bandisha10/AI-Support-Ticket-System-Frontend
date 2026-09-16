@@ -95,7 +95,7 @@ export default function Navbar() {
                 Analytics
               </Link>
               <Link
-                to="/agent/dashboard"
+                to="/agent/ticket-panel"
                 className="hover:text-accent transition-colors"
               >
                 Ticket Panel
@@ -119,7 +119,7 @@ export default function Navbar() {
                 Analytics
               </Link>
               <Link
-                to="/admin/triage"
+                to="/admin/ticket-panel"
                 className="hover:text-accent transition-colors"
               >
                 Ticket Panel
