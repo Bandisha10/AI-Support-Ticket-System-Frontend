@@ -2,14 +2,11 @@ import { useState } from "react";
 import { UserPlus, Copy, AlertTriangle } from "lucide-react";
 import * as adminService from "../../services/adminService";
 
-/**
- * Settings -> Agent Management.
- * Admin types an email, picks a department, clicks Invite Agent.
- * Backend creates the Supabase Auth user + agent profile and emails the
- * temporary password through Brevo.
- */
 export default function AgentInvite({ departments = [], onInvited }) {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [agentTier, setAgentTier] = useState(1);
   const [departmentId, setDepartmentId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
@@ -20,6 +17,10 @@ export default function AgentInvite({ departments = [], onInvited }) {
     setError("");
     setResult(null);
 
+    if (!firstName.trim() || !lastName.trim()) {
+      setError("Enter the agent's first and last name");
+      return;
+    }
     if (!email.trim()) {
       setError("Enter the agent's email address");
       return;
@@ -31,10 +32,19 @@ export default function AgentInvite({ departments = [], onInvited }) {
 
     setSubmitting(true);
     try {
-      const data = await adminService.inviteAgent(email.trim(), departmentId);
+      const data = await adminService.inviteAgent({
+        email: email.trim(),
+        department_id: departmentId,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        agent_tier: Number(agentTier),
+      });
       setResult(data);
+      setFirstName("");
+      setLastName("");
       setEmail("");
       setDepartmentId("");
+      setAgentTier(1);
       onInvited?.(data.user);
     } catch (err) {
       setError(
@@ -54,18 +64,36 @@ export default function AgentInvite({ departments = [], onInvited }) {
         <h2 className="font-semibold text-[14px]">Agent Management</h2>
       </div>
       <p className="text-[12px] text-[#9ca3af] mb-4">
-        The agent receives their login email, a temporary password, and their
-        department by email. They must set their own password on first sign-in.
+        The agent receives their login email, temporary password, department, and assigned tier by email.
       </p>
 
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-2">
+        <input
+          type="text"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          placeholder="First name"
+          aria-label="First name"
+          required
+          className="bg-[#0a0c10] border border-[#232632] rounded-[8px] px-3 py-2 text-[12px] w-[140px] outline-none focus:border-[#fbbf24]"
+        />
+        <input
+          type="text"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          placeholder="Last name"
+          aria-label="Last name"
+          required
+          className="bg-[#0a0c10] border border-[#232632] rounded-[8px] px-3 py-2 text-[12px] w-[140px] outline-none focus:border-[#fbbf24]"
+        />
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="agent@company.com"
           aria-label="Agent email"
-          className="bg-[#0a0c10] border border-[#232632] rounded-[8px] px-3 py-2 text-[12px] w-[280px] outline-none focus:border-[#fbbf24]"
+          required
+          className="bg-[#0a0c10] border border-[#232632] rounded-[8px] px-3 py-2 text-[12px] w-[220px] outline-none focus:border-[#fbbf24]"
         />
         <select
           value={departmentId}
@@ -79,6 +107,15 @@ export default function AgentInvite({ departments = [], onInvited }) {
               {dept.name}
             </option>
           ))}
+        </select>
+        <select
+          value={agentTier}
+          onChange={(e) => setAgentTier(Number(e.target.value))}
+          aria-label="Agent tier"
+          className="bg-[#0a0c10] border border-[#232632] rounded-[8px] px-3 py-2 text-[12px] outline-none focus:border-[#fbbf24]"
+        >
+          <option value={1}>Regular Agent</option>
+          <option value={2}>Super Agent</option>
         </select>
         <button
           type="submit"
@@ -102,7 +139,7 @@ export default function AgentInvite({ departments = [], onInvited }) {
             {result.detail}
           </p>
           <p className="mt-1 text-[#9ca3af]">
-            {result.user.email} · {result.department_name}
+            {result.user.first_name} {result.user.last_name} ({result.user.email}) · {result.department_name} · {result.user.agent_tier === 2 ? "Super Agent" : "Regular Agent"}
             {result.reinvited ? " · re-invited (password rotated)" : ""}
           </p>
           {result.temporary_password && (

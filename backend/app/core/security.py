@@ -71,12 +71,19 @@ def decode_supabase_jwt(token: str) -> dict:
         # refreshing the cache once if the kid is unknown (key rotation).
         kid = header.get("kid")
         jwks = _get_jwks()
-        key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
-        if key is None:
+        raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
+        if raw_key is None:
             jwks = _get_jwks(force=True)
-            key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
-        if key is None:
+            raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
+        if raw_key is None:
             raise TokenInvalidError(f"no JWK matches token kid={kid!r}")
+
+        # Convert the raw JWK dictionary to a cryptography public key
+        try:
+            key = jwt.PyJWK.from_dict(raw_key).key
+        except Exception as exc:
+            raise TokenInvalidError(f"invalid JWK: {exc}") from exc
+
         allowed = ["ES256", "RS256"]
 
     try:
@@ -87,6 +94,7 @@ def decode_supabase_jwt(token: str) -> dict:
             audience=AUDIENCE,
             options=dict(_REQUIRED_CLAIMS),
         )
+
     except ExpiredSignatureError as exc:
         raise TokenExpiredError(str(exc)) from exc
     except JWTError as exc:

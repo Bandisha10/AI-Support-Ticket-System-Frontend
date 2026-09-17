@@ -5,6 +5,10 @@ class UserRole(str, enum.Enum):
     agent = "agent"
     customer = "customer"
 
+class AgentTier(int, enum.Enum):
+    regular = 1
+    super_agent = 2
+
 class TicketPriority(str, enum.Enum):
     low = "low"
     medium = "medium"
