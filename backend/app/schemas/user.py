@@ -19,8 +19,10 @@ class UserRead(BaseModel):
     phone_number: str | None = None
     invited_by: UUID | None = None
     invited_by_email: str | None = None
+    invited_at: datetime | None = None
     must_change_password: bool = False
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class UserProfileUpdate(BaseModel):

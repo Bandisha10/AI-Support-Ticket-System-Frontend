@@ -191,7 +191,6 @@ async def logout(
         logger.warning("Supabase sign_out failed for sub=%s: %s", claims.get("sub"), exc)
     return {"message": "Logged out", "session_revoked": revoked}
 
-
 @router.get("/me", response_model=UserRead)
 async def me(
     current_user: User = Depends(get_current_user),
@@ -223,24 +222,9 @@ async def me(
         phone_number=current_user.phone_number,
         invited_by=current_user.invited_by,
         invited_by_email=invited_by_email,
+        invited_at=current_user.invited_at,
         must_change_password=current_user.must_change_password,
     )
-
-
-@router.patch("/me", response_model=UserRead)
-async def update_me(
-    payload: UserProfileUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Update personal profile fields (e.g. contact number)."""
-    if payload.phone_number is not None:
-        current_user.phone_number = payload.phone_number.strip() or None
-        await db.commit()
-        await db.refresh(current_user)
-
-    return await me(current_user=current_user, db=db)
-
 
 @router.post("/change-password", response_model=PasswordChangedResponse)
 async def change_password(

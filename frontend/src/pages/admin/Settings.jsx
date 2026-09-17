@@ -166,12 +166,6 @@ export default function Settings() {
             Manage your team, departments, and SLA policy.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-[#181b26] border border-[#232632] px-3 py-1.5 rounded-full">
-          <div className="w-6 h-6 bg-[#fbbf24] rounded-full flex items-center justify-center text-black text-[11px] font-bold">
-            A
-          </div>
-          <span className="text-[13px]">Admin</span>
-        </div>
       </div>
 
       {/* AGENT INVITE */}
