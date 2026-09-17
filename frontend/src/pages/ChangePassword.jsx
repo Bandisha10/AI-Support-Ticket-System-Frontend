@@ -1,14 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Lock, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Lock, Eye, EyeOff, ShieldCheck, Check, X } from "lucide-react";
 import Logo from "../components/common/Logo";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../components/common/Toast";
 
 const MIN_LENGTH = 8;
+const MAX_LENGTH = 16;
+
+const PASSWORD_REQUIREMENTS = [
+  {
+    id: "length",
+    label: "8 to 16 characters",
+    test: (p) => p.length >= MIN_LENGTH && p.length <= MAX_LENGTH,
+  },
+  { id: "lower", label: "One lowercase (a-z)", test: (p) => /[a-z]/.test(p) },
+  { id: "upper", label: "One uppercase (A-Z)", test: (p) => /[A-Z]/.test(p) },
+  { id: "number", label: "One number (0-9)", test: (p) => /[0-9]/.test(p) },
+];
 
 export default function ChangePassword() {
-  const { user, changePassword, mustChangePassword, homeRoute } = useAuth();
+  const { user, changePassword, mustChangePassword } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
@@ -17,23 +29,20 @@ export default function ChangePassword() {
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
+  const allRulesMet = PASSWORD_REQUIREMENTS.every((r) => r.test(form.next));
+  const canSubmit =
+    Boolean(form.current) &&
+    allRulesMet &&
+    form.next === form.confirm &&
+    form.next !== form.current &&
+    !submitting;
+
   async function handleSubmit(e) {
     e.preventDefault();
-    if (form.next.length < MIN_LENGTH) {
-      showToast(
-        `New password must be at least ${MIN_LENGTH} characters`,
-        "error",
-      );
+    if (!canSubmit) {
       return;
     }
-    if (form.next !== form.confirm) {
-      showToast("New passwords do not match", "error");
-      return;
-    }
-    if (form.next === form.current) {
-      showToast("New password must differ from the current one", "error");
-      return;
-    }
+
     setSubmitting(true);
     try {
       const profile = await changePassword(form.current, form.next);
@@ -44,9 +53,7 @@ export default function ChangePassword() {
           : profile?.role === "agent"
             ? "/agent/analytics"
             : "/tickets";
-      navigate(dest, {
-        replace: true,
-      });
+      navigate(dest, { replace: true });
     } catch (err) {
       showToast(
         err.response?.data?.detail?.[0]?.msg ||
@@ -96,29 +103,86 @@ export default function ChangePassword() {
             value={form.next}
             onChange={set("next")}
             show={show}
-            hint={`At least ${MIN_LENGTH} characters`}
+            maxLength={MAX_LENGTH}
           />
           <PasswordField
             label="Confirm new password"
             value={form.confirm}
             onChange={set("confirm")}
             show={show}
+            maxLength={MAX_LENGTH}
           />
 
-          <label className="flex items-center gap-2 text-xs text-gray-400">
-            <input
-              type="checkbox"
-              checked={show}
-              onChange={(e) => setShow(e.target.checked)}
-              className="rounded border-surface-border bg-surface-bg"
-            />
-            Show passwords
-          </label>
+          {/* Password Requirements Checklist & Match Status */}
+          <div className="rounded-lg border border-surface-border/70 bg-surface-bg/60 p-3 space-y-2.5">
+            <p className="text-xs font-semibold text-gray-400">
+              New password requirements:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              {PASSWORD_REQUIREMENTS.map((req) => {
+                const met = req.test(form.next);
+                return (
+                  <div
+                    key={req.id}
+                    className={`flex items-center gap-2 transition-colors ${
+                      met ? "text-emerald-400" : "text-gray-500"
+                    }`}
+                  >
+                    <div
+                      className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-colors ${
+                        met
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-surface-border text-gray-600"
+                      }`}
+                    >
+                      <Check className="h-2.5 w-2.5 stroke-[2.5]" />
+                    </div>
+                    <span>{req.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {form.confirm.length > 0 && (
+              <div
+                className={`flex items-center gap-2 pt-2 border-t border-surface-border/50 text-xs transition-colors ${
+                  form.next === form.confirm
+                    ? "text-emerald-400"
+                    : "text-rose-400"
+                }`}
+              >
+                <div
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                    form.next === form.confirm
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-rose-500/20 text-rose-400"
+                  }`}
+                >
+                  {form.next === form.confirm ? (
+                    <Check className="h-2.5 w-2.5 stroke-[2.5]" />
+                  ) : (
+                    <X className="h-2.5 w-2.5 stroke-[2.5]" />
+                  )}
+                </div>
+                <span>
+                  {form.next === form.confirm
+                    ? "Passwords match"
+                    : "Passwords do not match"}
+                </span>
+              </div>
+            )}
+
+            {form.current && form.next && form.current === form.next && (
+              <p className="text-[11px] text-rose-400 pt-1">
+                New password must be different from current password
+              </p>
+            )}
+          </div>
 
           <button
             type="submit"
-            disabled={submitting}
-            className="w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60"
+            disabled={!canSubmit}
+            className="w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60 transition-colors"
           >
             {submitting ? "Saving…" : "Update password"}
           </button>
@@ -128,7 +192,7 @@ export default function ChangePassword() {
   );
 }
 
-function PasswordField({ label, value, onChange, show, hint }) {
+function PasswordField({ label, value, onChange, show, maxLength }) {
   const [reveal, setReveal] = useState(false);
   const visible = show || reveal;
   return (
@@ -141,6 +205,7 @@ function PasswordField({ label, value, onChange, show, hint }) {
         <input
           type={visible ? "text" : "password"}
           required
+          maxLength={maxLength}
           value={value}
           onChange={onChange}
           autoComplete="new-password"
@@ -159,7 +224,6 @@ function PasswordField({ label, value, onChange, show, hint }) {
           )}
         </button>
       </div>
-      {hint && <p className="mt-1 text-[11px] text-gray-500">{hint}</p>}
     </div>
   );
 }
