@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -35,10 +35,11 @@ from backend.app.schemas.auth import (
 )
 from backend.app.schemas.user import UserProfileUpdate, UserRead
 
+from backend.app.core.limiter import limiter
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
-
 
 def _verify_password(email: str, password: str):
     """Confirm a password against Supabase Auth and return the auth user."""
@@ -126,9 +127,9 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
     await db.refresh(new_user)
     return {"message": "Signup successful", "user_id": str(new_user.id)}
 
-
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     try:
         res = supabase.auth.sign_in_with_password({"email": payload.email, "password": payload.password})
     except Exception as e:
@@ -254,9 +255,9 @@ async def change_password(
     )
     return PasswordChangedResponse(message="Password updated")
 
-
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
-async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/hour")
+async def forgot_password(request:Request,payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Send a verification email with a reset link."""
     email = str(payload.email).strip().lower()
     result = await db.execute(select(User).where(User.email == email))

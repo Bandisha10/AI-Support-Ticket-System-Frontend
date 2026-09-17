@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     MIN_PASSWORD_LENGTH: int = 8
 
     # --- Brevo Email Service ---
-    # --- Brevo Email Service ---
     BREVO_API_KEY: str | None = None
     SMTP_HOST: str | None = "smtp-relay.brevo.com"
     SMTP_PORT: int = 587

@@ -1,22 +1,17 @@
-from jose import ExpiredSignatureError, JWTError, jwt
-
-from backend.app.config import settings
-
 import threading
 import time
-
 import httpx
-from jose import ExpiredSignatureError, JWTError, jwt
-
+import jwt
+from jwt.exceptions import PyJWTError as JWTError, ExpiredSignatureError
 from backend.app.config import settings
 
 AUDIENCE = "authenticated"
+
 _JWKS_URL = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 _JWKS_TTL_SECONDS = 600
 _jwks_lock = threading.Lock()
 _jwks_cache: dict = {"keys": []}
 _jwks_fetched_at = 0.0
-
 
 def _get_jwks(force: bool = False) -> dict:
     global _jwks_cache, _jwks_fetched_at

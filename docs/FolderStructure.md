@@ -1,77 +1,144 @@
-# AI-Based Customer Support Ticket System — Folder Structure
+# Project Structure
 
 ```
-ai-support-ticket-system/
-├── frontend/                           # React + Tailwind
-│   ├── public/
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   │   ├── common/                # Button, Modal, Toast, etc
-│   │   │   ├── customer/              # TicketForm, TicketStatus
-│   │   │   ├── agent/                 # TicketQueue, ReplyBox, SLAWatcher
-│   │   │   └── admin/                 # UserMgmt, CategoryMgmt, SLAConfig
-│   │   ├── pages/
-│   │   │   ├── customer/              # NewTicket.jsx, MyTickets.jsx
-│   │   │   ├── agent/                 # Dashboard.jsx, TicketDetail.jsx
-│   │   │   └── admin/                 # Analytics.jsx, Settings.jsx
-│   │   ├── hooks/                     # useAuth, useTickets, useSLA
-│   │   ├── context/                   # AuthContext, RoleContext
-│   │   ├── services/                  # api.js (axios/fetch wrapper → FastAPI)
-│   │   ├── utils/
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── tailwind.config.js
-│   ├── package.json
-│   └── .env
-│
-├── backend/                            # FastAPI — biz logic + AI, ONE service
-│   ├── app/
-│   │   ├── main.py                     # FastAPI entrypoint
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── tickets.py          # POST /tickets, GET /tickets/:id
-│   │   │   │   ├── auth.py             # login/register, JWT
-│   │   │   │   ├── agents.py           # dashboard queue endpoints
-│   │   │   │   └── admin.py            # users/categories/SLA config
-│   │   │   └── deps.py                 # auth deps, role guards
-│   │   ├── core/
-│   │   │   ├── config.py               # env/settings
-│   │   │   ├── security.py             # JWT, bcrypt/argon2
-│   │   │   └── logging.py              # Sentry init
-│   │   ├── ai/                         # internal fn calls, NOT separate service
-│   │   │   ├── redact_pii.py           # Presidio / regex fallback
-│   │   │   ├── classify_ticket.py      # DistilBERT inference
-│   │   │   ├── suggest_reply.py        # sentence-transformers similarity
-│   │   │   └── model_artifacts/        # fine-tuned DistilBERT weights
-│   │   ├── services/                   # deterministic biz logic, no AI
-│   │   │   ├── routing_engine.py       # category → dept SQL lookup
-│   │   │   ├── sla_engine.py           # deadline calc, escalation
-│   │   │   └── ticket_lifecycle.py     # state machine transitions
-│   │   ├── db/
-│   │   │   ├── supabase_client.py
-│   │   │   ├── models.py               # pydantic schemas
-│   │   │   └── migrations/             # SQL migration files
-│   │   └── jobs/
-│   │       └── sla_cron.py             # pg_cron trigger / GH Actions fallback logic
-│   ├── tests/
-│   │   ├── unit/
-│   │   ├── integration/
-│   │   └── ai_eval/                    # classification accuracy, Macro-F1 etc
-│   ├── requirements.txt
-│   └── .env
-│
-├── supabase/
-│   ├── migrations/                     # versioned SQL
-│   ├── seed.sql
-│   └── functions/                      # pg_cron job defs
-│
-├── docs/
-│   ├── architecture.md
-│   ├── er-diagram.png
-│   └── api-spec.md
-│
-├── .gitignore
-├── .githooks
-└── README.md
+AI---Based-Customer-Support-Ticket-System
+├── alembic
+│ ├── versions/
+│ ├── env.py
+│ └── script.py.mako
+├── backend
+│ ├── app
+│ │ ├── ai
+│ │ │ ├── classify_ticket.py
+│ │ │ ├── label_mappings.json
+│ │ │ └── redact_pii.py
+│ │ ├── core
+│ │ │ ├── limiter.py
+│ │ │ ├── mailer.py
+│ │ │ ├── observability.py
+│ │ │ ├── roles.py
+│ │ │ ├── security.py
+│ │ │ └── supabase_client.py
+│ │ ├── crud
+│ │ │ └── base.py
+│ │ ├── models
+│ │ │ ├── category.py
+│ │ │ ├── department.py
+│ │ │ ├── enums.py
+│ │ │ ├── reply.py
+│ │ │ ├── routing_rule.py
+│ │ │ ├── sla_policy.py
+│ │ │ ├── sla_state.py
+│ │ │ ├── ticket_rating.py
+│ │ │ ├── ticket.py
+│ │ │ └── user.py
+│ │ ├── routers
+│ │ │ ├── auth.py
+│ │ │ ├── categories.py
+│ │ │ ├── departments.py
+│ │ │ ├── replies.py
+│ │ │ ├── routing_rules.py
+│ │ │ ├── sla_policies.py
+│ │ │ ├── sla_state.py
+│ │ │ ├── tickets.py
+│ │ │ └── users.py
+│ │ ├── schemas
+│ │ │ ├── auth.py
+│ │ │ ├── category.py
+│ │ │ ├── department.py
+│ │ │ ├── reply.py
+│ │ │ ├── routing_rule.py
+│ │ │ ├── sla_policy.py
+│ │ │ ├── sla_state.py
+│ │ │ ├── ticket_rating.py
+│ │ │ ├── ticket.py
+│ │ │ └── user.py
+│ │ ├── config.py
+│ │ ├── database.py
+│ │ ├── dependencies.py
+│ │ └── main.py
+│ └── scripts
+│ └── seed.py
+├── docs
+│ ├── architecture.md
+│ └── FolderStructure.md
+├── frontend
+│ ├── src
+│ │ ├── components
+│ │ │ ├── admin
+│ │ │ │ ├── AgentInvite.jsx
+│ │ │ │ ├── DepartmentMgmt.jsx
+│ │ │ │ ├── SLAConfig.jsx
+│ │ │ │ └── UserMgmt.jsx
+│ │ │ ├── agent
+│ │ │ │ ├── ReplyBox.jsx
+│ │ │ │ ├── SLAWatcher.jsx
+│ │ │ │ └── TicketTable.jsx
+│ │ │ ├── common
+│ │ │ │ ├── Button.jsx
+│ │ │ │ ├── DotGrid.jsx
+│ │ │ │ ├── Layout.jsx
+│ │ │ │ ├── Loader.jsx
+│ │ │ │ ├── Logo.jsx
+│ │ │ │ ├── Modal.jsx
+│ │ │ │ ├── Navbar.jsx
+│ │ │ │ ├── ProtectedRoute.jsx
+│ │ │ │ ├── Sidebar.jsx
+│ │ │ │ └── Toast.jsx
+│ │ │ └── customer
+│ │ │ ├── RatingModal.jsx
+│ │ │ ├── TicketForm.jsx
+│ │ │ └── TicketStatus.jsx
+│ │ ├── context
+│ │ │ ├── AuthContext.jsx
+│ │ │ ├── NotificationContext.jsx
+│ │ │ └── RoleContext.jsx
+│ │ ├── hooks
+│ │ │ ├── useAuth.js
+│ │ │ ├── useSLA.js
+│ │ │ └── useTickets.js
+│ │ ├── pages
+│ │ │ ├── admin
+│ │ │ │ ├── Analytics.jsx
+│ │ │ │ ├── Settings.jsx
+│ │ │ │ └── TicketPanel.jsx
+│ │ │ ├── agent
+│ │ │ │ ├── Analytics.jsx
+│ │ │ │ ├── TicketDetail.jsx
+│ │ │ │ └── TicketPanel.jsx
+│ │ │ ├── customer
+│ │ │ │ ├── MyTickets.jsx
+│ │ │ │ ├── NewTicket.jsx
+│ │ │ │ └── TicketDetail.jsx
+│ │ │ ├── ChangePassword.jsx
+│ │ │ ├── FAQ.jsx
+│ │ │ ├── ForgotPassword.jsx
+│ │ │ ├── Login.jsx
+│ │ │ ├── ResetPassword.jsx
+│ │ │ └── Signup.jsx
+│ │ ├── services
+│ │ │ ├── adminService.js
+│ │ │ ├── api.js
+│ │ │ ├── authService.js
+│ │ │ └── ticketService.js
+│ │ ├── utils
+│ │ │ ├── cannedReplies.js
+│ │ │ ├── constants.js
+│ │ │ └── formatters.js
+│ │ ├── App.jsx
+│ │ ├── index.css
+│ │ └── main.jsx
+│ └── index.html
+├── alembic.ini
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── pyrightconfig.json
+├── README_RUN.md
+├── README.md
+├── requirements.txt
+├── tailwind.config.js
+└── vite.config.js
+
+
 ```
