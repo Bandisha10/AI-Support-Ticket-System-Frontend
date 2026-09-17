@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Search, ChevronDown, HelpCircle, ArrowLeft, MessageSquare, LifeBuoy, Sparkles } from "lucide-react";
 import Logo from "../components/common/Logo";
+import { useAuth } from "../hooks/useAuth";
 
 const FAQ_ITEMS = [
   {
@@ -56,6 +57,7 @@ const FAQ_ITEMS = [
 ];
 
 export default function FAQ() {
+  const { user, homeRoute } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [openItems, setOpenItems] = useState({});
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -94,12 +96,21 @@ export default function FAQ() {
             </span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link
-              to="/login"
-              className="text-xs font-semibold text-gray-300 hover:text-white"
-            >
-              Sign In
-            </Link>
+            {user ? (
+              <Link
+                to={homeRoute || "/tickets"}
+                className="text-xs font-semibold text-gray-300 hover:text-white transition-colors"
+              >
+                Back to Dashboard
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className="text-xs font-semibold text-gray-300 hover:text-white transition-colors"
+              >
+                Sign In
+              </Link>
+            )}
             <Link
               to="/tickets/new"
               className="rounded-lg bg-accent px-3.5 py-1.5 text-xs font-semibold text-black hover:bg-accent-hover transition-colors"

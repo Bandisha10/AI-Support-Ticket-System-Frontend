@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "./components/common/Toast";
 import { NotificationProvider } from "./context/NotificationContext";
 import ProtectedRoute from "./components/common/ProtectedRoute";
-import Navbar from "./components/common/Navbar";
 import Layout from "./components/common/Layout";
 import { useAuth } from "./hooks/useAuth";
 
@@ -21,15 +20,7 @@ import TicketDetail from "./pages/agent/TicketDetail";
 import Analytics from "./pages/admin/Analytics";
 import Settings from "./pages/admin/Settings";
 import AdminTicketPanel from "./pages/admin/TicketPanel";
-
-function AppLayout({ children }) {
-  return (
-    <div className="min-h-screen bg-[#0B0D13]">
-      <Navbar />
-      <main>{children}</main>
-    </div>
-  );
-}
+import TicketHistory from "./pages/customer/TicketHistory";
 
 function HomeRedirect() {
   const { homeRoute } = useAuth();
@@ -59,25 +50,33 @@ export default function App() {
               <Route
                 path="/tickets/new"
                 element={
-                  <AppLayout>
+                  <Layout>
                     <NewTicket />
-                  </AppLayout>
+                  </Layout>
+                }
+              />
+              <Route
+                path="/tickets/history"
+                element={
+                  <Layout>
+                    <TicketHistory />
+                  </Layout>
                 }
               />
               <Route
                 path="/tickets/:ticketId"
                 element={
-                  <AppLayout>
+                  <Layout>
                     <CustomerTicketDetail />
-                  </AppLayout>
+                  </Layout>
                 }
               />
               <Route
                 path="/tickets"
                 element={
-                  <AppLayout>
+                  <Layout>
                     <MyTickets />
-                  </AppLayout>
+                  </Layout>
                 }
               />
             </Route>
