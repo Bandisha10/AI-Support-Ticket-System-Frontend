@@ -93,6 +93,7 @@ def decode_supabase_jwt(token: str) -> dict:
             algorithms=allowed,
             audience=AUDIENCE,
             options=dict(_REQUIRED_CLAIMS),
+            leeway=60,
         )
 
     except ExpiredSignatureError as exc:
@@ -127,6 +128,7 @@ def verify_password_reset_token(token: str) -> dict:
             settings.SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
             options={"require_exp": True, "require_sub": True},
+            leeway=60,
         )
         if claims.get("purpose") != "password_reset":
             raise TokenInvalidError("Invalid token purpose")
