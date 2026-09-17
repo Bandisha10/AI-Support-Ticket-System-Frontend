@@ -32,6 +32,7 @@ _REQUIRED_CLAIMS = {
     "require_exp": True,
     "require_aud": True,
     "require_sub": True,
+    "verify_iat": False,
 }
 
 class TokenError(Exception):
@@ -127,7 +128,7 @@ def verify_password_reset_token(token: str) -> dict:
             token,
             settings.SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
-            options={"require_exp": True, "require_sub": True},
+            options={"require_exp": True, "require_sub": True, "verify_iat": False},
             leeway=60,
         )
         if claims.get("purpose") != "password_reset":
