@@ -31,7 +31,12 @@ async def create_reply(payload: ReplyCreate, db: AsyncSession = Depends(get_db),
         if ticket.department_id != current_user.department_id:
             raise HTTPException(403, "Ticket is not in your department")
     # Admins can reply to any ticket (no additional check needed)
-    # --- Field stripping: customers cannot set privileged flags ---
+    elif current_user.role == UserRole.agent:
+        is_in_dept = ticket.department_id is not None and ticket.department_id == current_user.department_id
+        is_assigned = ticket.assigned_agent_id == current_user.id
+        if not (is_in_dept or is_assigned):
+            raise HTTPException(403, "Ticket is not assigned to you or your department")
+
     data = payload.model_dump()
     data["author_id"] = current_user.id
     if current_user.role == UserRole.customer:

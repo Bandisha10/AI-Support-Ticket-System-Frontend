@@ -27,3 +27,4 @@ scikit-learn
 gensim
 sentry-sdk==2.68.1
 python-multipart==0.0.12
+slowapi==0.1.9

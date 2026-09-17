@@ -2,7 +2,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func as sa_func, case, extract
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from datetime import datetime, timedelta
 
 from backend.app.database import get_db
 from backend.app.models.ticket import Ticket
@@ -13,16 +13,12 @@ from backend.app.models.enums import UserRole, TicketStatus, TicketPriority
 from backend.app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead
 from backend.app.crud.base import CRUDBase
 from backend.app.dependencies import get_current_user, require_role
-
 from backend.app.ai.classify_ticket import classify_ticket
 from backend.app.models.ticket_rating import TicketRating
 from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
-from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 crud = CRUDBase(Ticket)
-
-CustomerUser = aliased(User, name="customer_user")
 
 def _ticket_to_read(ticket: Ticket, customer_email: str | None, sla_due_at=None) -> dict:
     """Build a TicketRead-compatible dict from a Ticket ORM object + joined fields."""
@@ -198,7 +194,6 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
     csat = round(float(csat_val), 1) if csat_val is not None else None
 
     # 5. Agent Performance
-        # 5. Agent Performance
     agent_query = (
         select(
             User.id,
@@ -303,11 +298,11 @@ async def get_agent_analytics(
     priority_rows = (await db.execute(priority_query)).all()
     priority_counts = {k.name if hasattr(k, "name") else str(k): v for k, v in priority_rows if k is not None}
     tickets_by_priority = [
-        {"name": "urgent", "count": priority_counts.get("urgent", 0)},
         {"name": "high", "count": priority_counts.get("high", 0)},
         {"name": "medium", "count": priority_counts.get("medium", 0)},
         {"name": "low", "count": priority_counts.get("low", 0)},
     ]
+
 
     # 4. Department Breakdown
     dept_query = (

@@ -2,15 +2,29 @@
 from backend.app.core.observability import init_sentry
 init_sentry()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 
+from backend.app.core.limiter import limiter
 from backend.app.routers import (
-    auth, departments, categories, users,
-    routing_rules, sla_policies, tickets, sla_state, replies,
+    auth, departments, users, sla_policies, tickets, replies,
 )
 
-app = FastAPI(title="Ticketing System API", version="1.0.0")
+app = FastAPI(title="Deskwise", version="1.0.0")
+
+# Register limiter on app state and handle 429 exceptions
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": f"Too many requests. Please try again later: {exc}"},
+        headers={"Retry-After": "60"},
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,12 +36,9 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(departments.router)
-app.include_router(categories.router)
 app.include_router(users.router)
-app.include_router(routing_rules.router)
-app.include_router(sla_policies.router)
 app.include_router(tickets.router)
-app.include_router(sla_state.router)
+app.include_router(sla_policies.router)
 app.include_router(replies.router)
 
 @app.get("/health", tags=["Health"])

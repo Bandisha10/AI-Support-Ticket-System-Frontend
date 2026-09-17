@@ -1,11 +1,3 @@
-"""Outbound email via Brevo REST API or SMTP Relay.
-
-Prefers the Brevo HTTP API (https://api.brevo.com/v3/smtp/email) via httpx
-to avoid SMTP port blocking and '525 Unauthorized IP address' restrictions.
-Falls back to Brevo SMTP Relay if BREVO_API_KEY is not configured.
-"""
-from __future__ import annotations
-
 import logging
 import smtplib
 import ssl
@@ -145,8 +137,6 @@ and stops working once you change it.
 </body></html>
 """
     send_email(to=to, subject=subject, text_body=text_body, html_body=html_body)
-
-# Append to backend/app/core/mailer.py
 
 def send_password_reset_email(
     *,

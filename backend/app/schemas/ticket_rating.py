@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-import uuid
+from pydantic import BaseModel, ConfigDict, Field
+from uuid import UUID
 from datetime import datetime
 
 class TicketRatingCreate(BaseModel):
@@ -7,11 +7,9 @@ class TicketRatingCreate(BaseModel):
     feedback: str | None = None
 
 class TicketRatingRead(BaseModel):
-    id: uuid.UUID
-    ticket_id: uuid.UUID
+    id: UUID
+    ticket_id: UUID
     rating: int
     feedback: str | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

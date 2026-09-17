@@ -6,11 +6,11 @@ function cleanParams(params = {}) {
   );
 }
 
-// --- Customer-facing ---
+// --- Ticket Management ---
 export async function createTicket(payload) {
   const body = {
     subject: payload.subject,
-    body: payload.body_redacted ?? payload.description,
+    body: payload.body ?? payload.description ?? payload.body_redacted,
     category_id: payload.category_id || null,
     department_id: payload.department_id || null,
     priority: payload.priority || null,
@@ -20,28 +20,16 @@ export async function createTicket(payload) {
   return data;
 }
 
-export async function getMyTickets(params = {}) {
+// Single consolidated fetch function (aliased for backwards compatibility)
+export async function getTickets(params = {}) {
   const { data } = await api.get("/tickets/", { params: cleanParams(params) });
   return data;
 }
+export const getMyTickets = getTickets;
+export const getQueue = getTickets;
 
 export async function getTicketById(ticketId) {
   const { data } = await api.get(`/tickets/${ticketId}`);
-  return data;
-}
-
-export async function addCustomerReply(ticketId, message) {
-  const { data } = await api.post("/replies/", {
-    ticket_id: ticketId,
-    body: message,
-    is_auto_reply: false,
-  });
-  return data;
-}
-
-// --- Agent-facing ---
-export async function getQueue(params = {}) {
-  const { data } = await api.get("/tickets/", { params: cleanParams(params) });
   return data;
 }
 
@@ -57,15 +45,29 @@ export async function updateTicketStatus(ticketId, status) {
   return data;
 }
 
-export async function sendAgentReply(ticketId, message) {
+// --- Reply Management (Unified) ---
+export async function createReply(ticketId, message, isInternal = false) {
   const { data } = await api.post("/replies/", {
     ticket_id: ticketId,
     body: message,
+    is_internal_note: Boolean(isInternal),
     is_auto_reply: false,
   });
   return data;
 }
+export const addCustomerReply = (ticketId, msg) => createReply(ticketId, msg, false);
+export const sendAgentReply = (ticketId, msg, isInternal = false) => createReply(ticketId, msg, isInternal);
 
+export async function getTicketReplies(ticketId) {
+  const { data } = await api.get(`/replies/ticket/${ticketId}`);
+  return data;
+}
+
+export async function getSuggestedReply() {
+  return { suggestion: "" };
+}
+
+// --- Analytics ---
 export async function getAgentAnalytics(params = {}) {
   const { data } = await api.get("/tickets/analytics/agent", {
     params: cleanParams(params),
@@ -73,45 +75,27 @@ export async function getAgentAnalytics(params = {}) {
   return data;
 }
 
-export async function getTicketReplies(ticketId) {
-  const { data } = await api.get(`/replies/ticket/${ticketId}`);
-  return data;
-}
-
-// Backend endpoint not available yet.
-export async function getSuggestedReply() {
-  return { suggestion: "" };
-}
-
-// Backend endpoint not available yet.
-export async function getTicketEvents() {
-  return [];
-}
-
-// --- CSAT Rating (Feature 4) ---
-// POST /tickets/{id}/rating — stubs call and persists locally if backend is unavailable
+// --- CSAT Rating (Aligned with Backend Route POST /tickets/{id}/rate) ---
 export async function rateTicket(ticketId, ratingData) {
   try {
-    const { data } = await api.post(`/tickets/${ticketId}/rating`, ratingData);
+    const { data } = await api.post(`/tickets/${ticketId}/rate`, ratingData);
     return data;
   } catch (err) {
-    // Note: Backend /tickets/{id}/rating endpoint pending. Fallback to local storage persistence.
-    console.info(`[ticketService] POST /tickets/${ticketId}/rating fallback:`, ratingData);
+    console.warn(`[ticketService] POST /tickets/${ticketId}/rate failed, caching locally:`, err);
     const existingRatings = JSON.parse(localStorage.getItem("deskwise_ticket_ratings") || "{}");
     existingRatings[ticketId] = { ...ratingData, created_at: new Date().toISOString() };
     localStorage.setItem("deskwise_ticket_ratings", JSON.stringify(existingRatings));
-    return { success: true, local: true };
+    throw err;
   }
 }
 
-// --- Canned Replies (Feature 5) ---
-// GET /agents/canned-replies — fetches from backend with fallback to CANNED_REPLIES
+// --- Canned Replies ---
 export async function getCannedReplies() {
   try {
     const { data } = await api.get("/agents/canned-replies");
     if (Array.isArray(data) && data.length > 0) return data;
   } catch {
-    // Backend endpoint pending — fall back to hardcoded templates
+    // Fall back to hardcoded templates if backend endpoint is unconfigured
   }
   const { CANNED_REPLIES } = await import("../utils/cannedReplies");
   return CANNED_REPLIES;
