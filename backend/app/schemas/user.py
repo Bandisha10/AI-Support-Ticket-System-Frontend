@@ -1,12 +1,16 @@
+# backend/app/schemas/user.py
 from pydantic import BaseModel, ConfigDict, EmailStr
 from uuid import UUID
 from datetime import datetime
-from backend.app.models.enums import UserRole
+from backend.app.models.enums import AgentTier, UserRole
 
 
 class UserRead(BaseModel):
     id: UUID
     email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
+    agent_tier: AgentTier = AgentTier.regular
     role: UserRole
     department_id: UUID | None = None
     department_name: str | None = None
@@ -28,13 +32,17 @@ class UserUpdate(BaseModel):
     department_id: UUID | None = None
     is_active: bool | None = None
     phone_number: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    agent_tier: AgentTier | None = None
 
 
 class AgentInvite(BaseModel):
-    """Admin -> Settings -> Agent Management -> Invite Agent."""
-
     email: EmailStr
     department_id: UUID
+    first_name: str
+    last_name: str
+    agent_tier: AgentTier = AgentTier.regular
 
 
 class AgentInviteResponse(BaseModel):

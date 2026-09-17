@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from backend.app.database import Base
-from backend.app.models.enums import UserRole
+from backend.app.models.enums import AgentTier, UserRole
 
 class User(Base):
     __tablename__ = "users"
@@ -18,8 +18,15 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     phone_number: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    agent_tier: Mapped[AgentTier] = mapped_column(
+        SAEnum(AgentTier, values_callable=lambda x: [str(e.value) for e in x], name="agent_tier"),
+        nullable=False,
+        default=AgentTier.regular,
+        server_default="1",
+    )
 
-    # True while the user is still on the admin-generated temporary password.
     must_change_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )

@@ -47,11 +47,16 @@ export async function getAnalyticsOverview(params = {}) {
   return data;
 }
 
-export async function inviteAgent(email, departmentId) {
-  const { data } = await api.post("/users/invite-agent", {
-    email,
-    department_id: departmentId,
-  });
-  // { user, department_name, email_sent, reinvited, detail, temporary_password? }
+export async function inviteAgent(email, departmentId, firstName, lastName, agentTier = 1) {
+  const payload = typeof email === "object"
+    ? email
+    : {
+        email,
+        department_id: departmentId,
+        first_name: firstName,
+        last_name: lastName,
+        agent_tier: agentTier,
+      };
+  const { data } = await api.post("/users/invite-agent", payload);
   return data;
 }

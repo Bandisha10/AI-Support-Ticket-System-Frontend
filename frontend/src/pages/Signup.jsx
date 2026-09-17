@@ -10,7 +10,12 @@ const MIN_LENGTH = 8;
 export default function Signup() {
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    first_name: "",
+    last_name: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -50,6 +55,38 @@ export default function Signup() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                First Name <span className="text-accent">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="John"
+                value={form.first_name}
+                onChange={(e) =>
+                  setForm({ ...form, first_name: e.target.value })
+                }
+                className="w-full rounded-lg border border-surface-border bg-surface-bg py-2.5 px-3 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                Last Name <span className="text-accent">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="Doe"
+                value={form.last_name}
+                onChange={(e) =>
+                  setForm({ ...form, last_name: e.target.value })
+                }
+                className="w-full rounded-lg border border-surface-border bg-surface-bg py-2.5 px-3 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
+              />
+            </div>
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">
               Email Address <span className="text-accent">*</span>
@@ -106,7 +143,10 @@ export default function Signup() {
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{" "}
-            <Link to="/login" className="font-medium text-accent hover:text-accent-hover">
+            <Link
+              to="/login"
+              className="font-medium text-accent hover:text-accent-hover"
+            >
               Sign in
             </Link>
           </p>

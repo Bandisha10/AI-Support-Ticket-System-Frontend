@@ -69,6 +69,20 @@ export default function Settings() {
     }
   };
 
+  // UPDATE AGENT TIER
+  const updateAgentTier = async (userId, tier) => {
+    try {
+      const updatedUser = await adminService.updateUserRole(userId, {
+        agent_tier: Number(tier),
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, ...updatedUser } : u)),
+      );
+    } catch (e) {
+      alert("Agent tier update failed");
+    }
+  };
+
   // ADD DEPARTMENT
   const addDepartment = async () => {
     if (!newDepartment.trim()) return;
@@ -177,45 +191,67 @@ export default function Settings() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[2fr_2.5fr_1fr_1.5fr] text-[11px] text-[#9ca3af] px-3 py-2">
+            <div className="grid grid-cols-[2fr_2.2fr_1fr_1.3fr_1.5fr] text-[11px] text-[#9ca3af] px-3 py-2">
               <span>NAME</span>
               <span>EMAIL</span>
               <span>STATUS</span>
+              <span>TIER</span>
               <span>ASSIGNMENT</span>
             </div>
-            {users.map((u) => (
-              <div
-                key={u.id}
-                className="grid grid-cols-[2fr_2.5fr_1fr_1.5fr] items-center px-3 py-2.5 border-t border-[#1a1d27] text-[13px]"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-[#fbbf24] flex items-center justify-center text-[11px] font-bold text-black">
-                    {u.name?.[0] || u.email[0]}
+            {users.map((u) => {
+              const displayName =
+                [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
+                u.name ||
+                u.email?.split("@")[0];
+              return (
+                <div
+                  key={u.id}
+                  className="grid grid-cols-[2fr_2.2fr_1fr_1.3fr_1.5fr] items-center px-3 py-2.5 border-t border-[#1a1d27] text-[13px]"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-[#fbbf24] flex items-center justify-center text-[11px] font-bold text-black">
+                      {displayName[0]?.toUpperCase() || "U"}
+                    </div>
+                    <span>{displayName}</span>
                   </div>
-                  <span>{u.name || u.email.split("@")[0]}</span>
-                </div>
-                <span className="text-[#9ca3af] text-[12px]">{u.email}</span>
-                <span
-                  className={`w-fit px-2 py-0.5 rounded text-[10px] ${u.is_active === false ? "bg-[#2a1414] text-[#f87171]" : "bg-[#102a18] text-[#4ade80]"}`}
-                >
-                  {u.is_active === false ? "Inactive" : "Active"}
-                </span>
-                <select
-                  value={assignmentValue(u)}
-                  onChange={(e) => updateAssignment(u.id, e.target.value)}
-                  className="bg-[#0a0c10] border border-[#232632] rounded-[6px] px-2 py-1 text-[12px] outline-none"
-                >
-                  <option value="" disabled>
-                    Select...
-                  </option>
-                  {departments.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.name}
+                  <span className="text-[#9ca3af] text-[12px]">{u.email}</span>
+                  <span
+                    className={`w-fit px-2 py-0.5 rounded text-[10px] ${u.is_active === false ? "bg-[#2a1414] text-[#f87171]" : "bg-[#102a18] text-[#4ade80]"}`}
+                  >
+                    {u.is_active === false ? "Inactive" : "Active"}
+                  </span>
+
+                  {/* Tier column */}
+                  {u.role === "agent" ? (
+                    <select
+                      value={u.agent_tier ?? 1}
+                      onChange={(e) => updateAgentTier(u.id, e.target.value)}
+                      className="bg-[#0a0c10] border border-[#232632] rounded-[6px] px-2 py-1 text-[12px] outline-none"
+                    >
+                      <option value={1}>Regular</option>
+                      <option value={2}>Super Agent</option>
+                    </select>
+                  ) : (
+                    <span className="text-[12px] text-[#6b7280]">—</span>
+                  )}
+
+                  <select
+                    value={assignmentValue(u)}
+                    onChange={(e) => updateAssignment(u.id, e.target.value)}
+                    className="bg-[#0a0c10] border border-[#232632] rounded-[6px] px-2 py-1 text-[12px] outline-none"
+                  >
+                    <option value="" disabled>
+                      Select...
                     </option>
-                  ))}
-                </select>
-              </div>
-            ))}
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            })}
           </>
         )}
       </div>

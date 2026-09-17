@@ -65,7 +65,7 @@ def _find_auth_user_id_by_email(email: str) -> str | None:
 
 
 @router.post("/invite-agent", response_model=AgentInviteResponse, status_code=201)
-@router.post(  # legacy path kept alive so older clients keep working
+@router.post(
     "/invite",
     response_model=AgentInviteResponse,
     status_code=201,
@@ -98,7 +98,12 @@ async def invite_agent(
                 "email": email,
                 "password": temp_password,
                 "email_confirm": True,  # skip the confirm-email round trip
-                "user_metadata": {"role": "agent", "department": department.name},
+                "user_metadata": {
+                    "role": "agent",
+                    "department": department.name,
+                    "first_name": payload.first_name,
+                    "last_name": payload.last_name,
+                },
             },
         )
         auth_user = getattr(res, "user", None)
@@ -137,9 +142,6 @@ async def invite_agent(
         if profile is None:
             profile = await db.get(User, UUID(auth_user_id))
         elif str(profile.id) != auth_user_id:
-            # auth.users <-> public.users drift: the profile row was created
-            # against a different auth account. Re-pointing the PK would break
-            # every ticket FK, so make the admin resolve it explicitly.
             raise HTTPException(
                 409,
                 f"A profile for {email} already exists with id {profile.id}, but "
@@ -155,6 +157,9 @@ async def invite_agent(
                 role=UserRole.agent,
                 department_id=department.id,
                 is_active=True,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                agent_tier=payload.agent_tier,
                 must_change_password=True,
                 invited_at=now,
                 invited_by=admin.id,
@@ -165,6 +170,9 @@ async def invite_agent(
                 raise HTTPException(403, "The seeded Super Admin cannot be re-invited")
             profile.role = UserRole.agent
             profile.department_id = department.id
+            profile.first_name = payload.first_name
+            profile.last_name = payload.last_name
+            profile.agent_tier = payload.agent_tier
             profile.is_active = True
             profile.must_change_password = True
             profile.invited_at = now

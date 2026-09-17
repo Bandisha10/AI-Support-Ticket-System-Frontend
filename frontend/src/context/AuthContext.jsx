@@ -80,9 +80,11 @@ export function AuthProvider({ children }) {
   );
 }
 
-// The users table has no name column yet, so /auth/me returns no name.
-// Fall back to the email's local-part so the navbar isn't blank.
 function withDisplayName(profile) {
   if (!profile) return profile;
-  return { ...profile, name: profile.name ?? profile.email?.split("@")[0] ?? "User" };
+  const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim();
+  return {
+    ...profile,
+    name: fullName || profile.email?.split("@")[0] || "User",
+  };
 }

@@ -109,11 +109,14 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
         id=user.id,
         email=email,
         password_hash="MANAGED_BY_SUPABASE_AUTH",
+        first_name=payload.first_name,
+        last_name=payload.last_name,
         phone_number=payload.phone_number,
         role=UserRole.customer,
         must_change_password=False,
     )
     db.add(new_user)
+
 
     try:
         await db.commit()
@@ -207,6 +210,9 @@ async def me(
     return UserRead(
         id=current_user.id,
         email=current_user.email,
+        first_name=current_user.first_name,
+        last_name=current_user.last_name,
+        agent_tier=current_user.agent_tier,
         role=current_user.role,
         department_id=current_user.department_id,
         department_name=department_name,
