@@ -82,21 +82,42 @@ def send_email(to: str, subject: str, text_body: str, html_body: str | None = No
     logger.info("Email sent via Brevo SMTP to %s", to)
 
 
+# backend/app/core/mailer.py
 def send_agent_invite_email(
     *,
     to: str,
     temporary_password: str,
     department_name: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+    agent_tier: int | None = 1,
     login_url: str | None = None,
 ) -> None:
     login_url = login_url or f"{settings.FRONTEND_URL.rstrip('/')}/login"
     subject = f"Your {settings.APP_NAME} agent account"
 
-    text_body = f"""You have been added to {settings.APP_NAME} as a support agent.
+    # Format full name and tier label
+    full_name = " ".join(part for part in [first_name, last_name] if part).strip()
+    tier_val = getattr(agent_tier, "value", agent_tier)
+    tier_name = "Super Agent" if str(tier_val) in ("2", "super_agent") else "Regular Agent"
 
-Login email:        {to}
+    name_text_line = f"Agent Name:         {full_name}\n" if full_name else ""
+    name_html_row = f"""\
+      <tr>
+        <td style="padding:8px 0;color:#9ca3af;width:150px">Agent Name</td>
+        <td style="padding:8px 0;color:#ffffff"><strong>{full_name}</strong></td>
+      </tr>""" if full_name else ""
+
+    greeting = f"Hello {first_name}," if first_name else f"Welcome to {settings.APP_NAME},"
+
+    text_body = f"""{greeting}
+
+You have been added to {settings.APP_NAME} as a {tier_name}.
+
+{name_text_line}Login email:        {to}
 Temporary password: {temporary_password}
 Department:         {department_name}
+Role / Tier:        {tier_name}
 Login URL:          {login_url}
 
 You will be asked to set your own password the first time you sign in.
@@ -110,9 +131,10 @@ and stops working once you change it.
   <div style="max-width:520px;margin:0 auto;background:#11131a;border:1px solid #232632;border-radius:12px;padding:28px">
     <h1 style="margin:0 0 4px;font-size:18px;color:#ffffff">Welcome to {settings.APP_NAME}</h1>
     <p style="margin:0 0 20px;font-size:13px;color:#9ca3af">
-      An administrator created a support agent account for you.
+      An administrator created a <strong style="color:#fbbf24">{tier_name}</strong> account for you.
     </p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;font-size:13px;border-collapse:collapse">
+{name_html_row}
       <tr>
         <td style="padding:8px 0;color:#9ca3af;width:150px">Login email</td>
         <td style="padding:8px 0;color:#ffffff"><strong>{to}</strong></td>
@@ -124,6 +146,10 @@ and stops working once you change it.
       <tr>
         <td style="padding:8px 0;color:#9ca3af">Department</td>
         <td style="padding:8px 0;color:#ffffff">{department_name}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#9ca3af">Agent Tier</td>
+        <td style="padding:8px 0;color:#ffffff"><span style="background:#181b26;border:1px solid #232632;border-radius:6px;padding:2px 8px;font-size:12px;color:#fbbf24">{tier_name}</span></td>
       </tr>
     </table>
     <p style="margin:24px 0 0">
@@ -137,6 +163,7 @@ and stops working once you change it.
 </body></html>
 """
     send_email(to=to, subject=subject, text_body=text_body, html_body=html_body)
+
 
 def send_password_reset_email(
     *,

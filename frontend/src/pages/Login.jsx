@@ -21,7 +21,7 @@ export default function Login() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const user = await login(form.email, form.password);
+      const user = await login(form.email.trim(), form.password.trim());
       if (user.must_change_password) {
         navigate("/change-password", { replace: true });
         return;
