@@ -146,6 +146,14 @@ export default function Login() {
               </div>
             </div>
 
+            <button
+              type="submit"
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-sm font-semibold text-black transition-colors hover:bg-accent-hover disabled:opacity-60"
+            >
+              {submitting ? "Signing in…" : "Sign In →"}
+            </button>
+
             <p className="pt-1 text-center text-sm text-gray-500">
               <Link
                 to="/forgot-password"
@@ -154,14 +162,6 @@ export default function Login() {
                 Forgot password
               </Link>
             </p>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-sm font-semibold text-black transition-colors hover:bg-accent-hover disabled:opacity-60"
-            >
-              {submitting ? "Signing in…" : "Sign In →"}
-            </button>
 
             <p className="text-center text-xs text-gray-600">
               Support agents do not sign up - an administrator invites you and

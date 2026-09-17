@@ -18,8 +18,10 @@ import {
   Loader2,
   Building2,
   Award,
+  PlusCircle,
+  HelpCircle,
+  History,
 } from "lucide-react";
-
 import { useNotifications } from "../../context/NotificationContext";
 import { formatRelativeTime, formatDateTime } from "../../utils/formatters";
 import { useAuth } from "../../hooks/useAuth";
@@ -29,7 +31,7 @@ import * as authService from "../../services/authService";
 export default function Sidebar() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { user, logout, isAdmin, isAgent, homeRoute } = useAuth();
+  const { user, logout, isAdmin, isAgent, isCustomer, homeRoute } = useAuth();
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
     useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -58,7 +60,11 @@ export default function Sidebar() {
     markAsRead(notif.id);
     setShowNotifications(false);
     if (notif.ticketId) {
-      navigate(`/agent/tickets/${notif.ticketId}`);
+      const dest =
+        isCustomer || user?.role === "customer"
+          ? `/tickets/${notif.ticketId}`
+          : `/agent/tickets/${notif.ticketId}`;
+      navigate(dest);
     }
   }
 
@@ -103,8 +109,16 @@ export default function Sidebar() {
         { label: "Ticket Panel", to: "/agent/ticket-panel", icon: Inbox },
       ];
     }
+    if (isCustomer || user?.role === "customer") {
+      return [
+        { label: "My Tickets", to: "/tickets", icon: Ticket, end: true },
+        { label: "New Ticket", to: "/tickets/new", icon: PlusCircle },
+        { label: "History", to: "/tickets/history", icon: History },
+        { label: "Help & FAQ", to: "/faq", icon: HelpCircle },
+      ];
+    }
     return [];
-  }, [isAdmin, isAgent]);
+  }, [isAdmin, isAgent, isCustomer, user?.role]);
 
   const displayName =
     [user?.first_name, user?.last_name].filter(Boolean).join(" ") ||
@@ -268,6 +282,7 @@ export default function Sidebar() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                end={item.end}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-2.5 rounded-xl text-[13px] font-medium transition-colors ${
                     isActive
