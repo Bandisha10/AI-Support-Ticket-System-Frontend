@@ -4,7 +4,10 @@ from backend.app.config import settings
 
 class SignUpRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=settings.MIN_PASSWORD_LENGTH)
+    password: str = Field(
+        min_length=settings.MIN_PASSWORD_LENGTH,
+        max_length=settings.MAX_PASSWORD_LENGTH,
+    )
     first_name: str
     last_name: str
     phone_number: str | None = None
@@ -22,10 +25,13 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int | None = None
     user: dict
+
 class _NewPasswordMixin(BaseModel):
     current_password: str = Field(min_length=1)
-    new_password: str = Field(min_length=settings.MIN_PASSWORD_LENGTH, max_length=72)
-
+    new_password: str = Field(
+        min_length=settings.MIN_PASSWORD_LENGTH,
+        max_length=settings.MAX_PASSWORD_LENGTH,
+    )
     @model_validator(mode="after")
     def _passwords_must_differ(self):
         if self.current_password == self.new_password:
@@ -48,7 +54,10 @@ class ForgotPasswordResponse(BaseModel):
 class ResetPasswordRequest(BaseModel):
     """Reset password using the token sent to the user's email."""
     token: str
-    new_password: str = Field(min_length=settings.MIN_PASSWORD_LENGTH, max_length=72)
+    new_password: str = Field(
+        min_length=settings.MIN_PASSWORD_LENGTH,
+        max_length=settings.MAX_PASSWORD_LENGTH,
+    )
 
 
 class PasswordChangedResponse(BaseModel):

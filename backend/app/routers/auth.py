@@ -133,8 +133,10 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    email = str(payload.email).strip().lower()
+    password = str(payload.password).strip()
     try:
-        res = supabase.auth.sign_in_with_password({"email": payload.email, "password": payload.password})
+        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
     except Exception as e:
         raise HTTPException(401, str(e))
     session = res.session

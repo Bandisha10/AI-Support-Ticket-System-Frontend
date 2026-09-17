@@ -20,9 +20,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "Deskwise"
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # backend/app/config.py
     ALLOW_PUBLIC_SIGNUP: bool = True
     ENFORCE_PASSWORD_CHANGE: bool = True
     MIN_PASSWORD_LENGTH: int = 8
+    MAX_PASSWORD_LENGTH: int = 16
+
 
     # --- Brevo Email Service ---
     BREVO_API_KEY: str | None = None

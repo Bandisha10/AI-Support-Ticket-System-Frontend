@@ -27,19 +27,22 @@ crud = CRUDBase(User)
 
 SUPER_ADMIN_EMAIL = "admin@test.com"
 
-_PW_SYMBOLS = "!@#$%^&*-_=+?"
-
-
 def is_super_admin(user: User) -> bool:
     return user.email.strip().lower() == SUPER_ADMIN_EMAIL
 
+_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+_LOWER = "abcdefghjkmnpqrstuvwxyz"
+_DIGITS = "23456789"
+_PW_SYMBOLS = "!@#$%*"
 
-def generate_temp_password(length: int = 16) -> str:
-    """Random password that always satisfies upper/lower/digit/symbol rules."""
-    pools = (string.ascii_uppercase, string.ascii_lowercase, string.digits, _PW_SYMBOLS)
+def generate_temp_password(length: int = 10) -> str:
+    """Generate a clean, unambiguous temporary password (between 8 and 16 characters)."""
+    length = max(8, min(length, 16))
+    pools = (_UPPER, _LOWER, _DIGITS, _PW_SYMBOLS)
     alphabet = "".join(pools)
-    chars = [secrets.choice(pool) for pool in pools]
-    chars += [secrets.choice(alphabet) for _ in range(max(length, 12) - len(pools))]
+    # Guarantee at least 1 from each pool to satisfy password complexity rules
+    chars = [secrets.choice(p) for p in pools]
+    chars += [secrets.choice(alphabet) for _ in range(length - len(pools))]
     secrets.SystemRandom().shuffle(chars)
     return "".join(chars)
 
@@ -201,10 +204,14 @@ async def invite_agent(
             to=email,
             temporary_password=temp_password,
             department_name=department.name,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            agent_tier=payload.agent_tier,
         )
     except Exception as exc:
         email_sent = False
         logger.warning("Brevo email send failed for %s: %s", email, exc)
+
 
     detail = (
         f"Invitation emailed to {email}"
