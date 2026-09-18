@@ -19,13 +19,15 @@ const PASSWORD_REQUIREMENTS = [
   { id: "number", label: "One number (0-9)", test: (p) => /[0-9]/.test(p) },
 ];
 
-export default function ChangePassword() {
+export default function ChangePassword({ isModal = false, isOpen = true, onClose }) {
   const { user, changePassword, mustChangePassword } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
   const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  if (isModal && !isOpen) return null;
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
@@ -37,6 +39,12 @@ export default function ChangePassword() {
     form.next !== form.current &&
     !submitting;
 
+  const handleClose = () => {
+    if (submitting) return;
+    setForm({ current: "", next: "", confirm: "" });
+    onClose?.();
+  };
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (!canSubmit) {
@@ -47,13 +55,17 @@ export default function ChangePassword() {
     try {
       const profile = await changePassword(form.current, form.next);
       showToast("Password updated", "success");
-      const dest =
-        profile?.role === "admin"
-          ? "/admin/analytics"
-          : profile?.role === "agent"
-            ? "/agent/analytics"
-            : "/tickets";
-      navigate(dest, { replace: true });
+      if (isModal) {
+        handleClose();
+      } else {
+        const dest =
+          profile?.role === "admin"
+            ? "/admin/analytics"
+            : profile?.role === "agent"
+              ? "/agent/analytics"
+              : "/tickets";
+        navigate(dest, { replace: true });
+      }
     } catch (err) {
       showToast(
         err.response?.data?.detail?.[0]?.msg ||
@@ -66,17 +78,33 @@ export default function ChangePassword() {
     }
   }
 
+  const containerClasses = isModal
+    ? "fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200"
+    : "flex min-h-screen items-center justify-center bg-surface-bg p-4";
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-bg p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-surface-border bg-surface-card p-8">
-        <div className="mb-6 flex items-center gap-3">
-          <Logo size={44} />
-          <div>
-            <h1 className="text-lg font-bold text-white">
-              {mustChangePassword ? "Set your password" : "Change password"}
-            </h1>
-            <p className="text-xs text-gray-500">{user?.email}</p>
+    <div className={containerClasses}>
+      <div className="w-full max-w-sm rounded-2xl border border-surface-border bg-surface-card p-8 shadow-2xl relative">
+        <div className="mb-6 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <Logo size={44} />
+            <div>
+              <h1 className="text-lg font-bold text-white">
+                {mustChangePassword ? "Set your password" : "Change password"}
+              </h1>
+              <p className="text-xs text-gray-500">{user?.email}</p>
+            </div>
           </div>
+          {isModal && (
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-surface-hover transition-colors cursor-pointer"
+              title="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         {mustChangePassword && (
@@ -179,13 +207,27 @@ export default function ChangePassword() {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="w-full rounded-lg bg-accent py-2.5 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60 transition-colors"
-          >
-            {submitting ? "Saving…" : "Update password"}
-          </button>
+          <div className="flex items-center justify-end gap-3 pt-2">
+            {isModal && (
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={submitting}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-300 hover:text-white bg-surface-hover border border-surface-border transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className={`${
+                isModal ? "flex-1" : "w-full"
+              } rounded-lg bg-accent py-2.5 text-sm font-semibold text-black hover:bg-accent-hover disabled:opacity-60 transition-colors cursor-pointer disabled:cursor-not-allowed`}
+            >
+              {submitting ? "Saving…" : "Update password"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
