@@ -11,20 +11,11 @@ import {
 } from "lucide-react";
 import * as authService from "../services/authService";
 import { useToast } from "../components/common/Toast";
-
-const MIN_LENGTH = 8;
-const MAX_LENGTH = 16;
-
-const PASSWORD_REQUIREMENTS = [
-  {
-    id: "length",
-    label: "8 to 16 characters",
-    test: (p) => p.length >= MIN_LENGTH && p.length <= MAX_LENGTH,
-  },
-  { id: "lower", label: "One lowercase (a-z)", test: (p) => /[a-z]/.test(p) },
-  { id: "upper", label: "One uppercase (A-Z)", test: (p) => /[A-Z]/.test(p) },
-  { id: "number", label: "One number (0-9)", test: (p) => /[0-9]/.test(p) },
-];
+import {
+  MIN_PASSWORD_LENGTH as MIN_LENGTH,
+  MAX_PASSWORD_LENGTH as MAX_LENGTH,
+  PASSWORD_REQUIREMENTS,
+} from "../utils/passwordRules";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -34,7 +25,6 @@ export default function ResetPassword() {
   const token = searchParams.get("token");
 
   const [form, setForm] = useState({ next: "", confirm: "" });
-  const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
@@ -166,7 +156,6 @@ export default function ResetPassword() {
             placeholder={`${MIN_LENGTH}–${MAX_LENGTH} characters`}
             value={form.next}
             onChange={set("next")}
-            visible={show}
             maxLength={MAX_LENGTH}
           />
           <Field
@@ -174,7 +163,6 @@ export default function ResetPassword() {
             placeholder="Confirm new password"
             value={form.confirm}
             onChange={set("confirm")}
-            visible={show}
             maxLength={MAX_LENGTH}
           />
 
@@ -261,9 +249,8 @@ export default function ResetPassword() {
   );
 }
 
-function Field({ label, placeholder, value, onChange, visible, maxLength }) {
+function Field({ label, placeholder, value, onChange, maxLength }) {
   const [reveal, setReveal] = useState(false);
-  const shown = visible || reveal;
 
   return (
     <div>
@@ -273,7 +260,7 @@ function Field({ label, placeholder, value, onChange, visible, maxLength }) {
       <div className="relative">
         <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
         <input
-          type={shown ? "text" : "password"}
+          type={reveal ? "text" : "password"}
           required
           maxLength={maxLength}
           placeholder={placeholder}
@@ -285,10 +272,14 @@ function Field({ label, placeholder, value, onChange, visible, maxLength }) {
         <button
           type="button"
           onClick={() => setReveal((v) => !v)}
-          aria-label={shown ? "Hide password" : "Show password"}
+          aria-label={reveal ? "Hide password" : "Show password"}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
         >
-          {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          {reveal ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
         </button>
       </div>
     </div>

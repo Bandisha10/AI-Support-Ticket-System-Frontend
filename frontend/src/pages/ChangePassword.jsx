@@ -4,27 +4,21 @@ import { Lock, Eye, EyeOff, ShieldCheck, Check, X } from "lucide-react";
 import Logo from "../components/common/Logo";
 import { useAuth } from "../hooks/useAuth";
 import { useToast } from "../components/common/Toast";
+import {
+  MIN_PASSWORD_LENGTH as MIN_LENGTH,
+  MAX_PASSWORD_LENGTH as MAX_LENGTH,
+  PASSWORD_REQUIREMENTS,
+} from "../utils/passwordRules";
 
-const MIN_LENGTH = 8;
-const MAX_LENGTH = 16;
-
-const PASSWORD_REQUIREMENTS = [
-  {
-    id: "length",
-    label: "8 to 16 characters",
-    test: (p) => p.length >= MIN_LENGTH && p.length <= MAX_LENGTH,
-  },
-  { id: "lower", label: "One lowercase (a-z)", test: (p) => /[a-z]/.test(p) },
-  { id: "upper", label: "One uppercase (A-Z)", test: (p) => /[A-Z]/.test(p) },
-  { id: "number", label: "One number (0-9)", test: (p) => /[0-9]/.test(p) },
-];
-
-export default function ChangePassword({ isModal = false, isOpen = true, onClose }) {
-  const { user, changePassword, mustChangePassword } = useAuth();
+export default function ChangePassword({
+  isModal = false,
+  isOpen = true,
+  onClose,
+}) {
+  const { user, changePassword, mustChangePassword, homeRoute } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
-  const [show, setShow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   if (isModal && !isOpen) return null;
@@ -55,16 +49,10 @@ export default function ChangePassword({ isModal = false, isOpen = true, onClose
     try {
       const profile = await changePassword(form.current, form.next);
       showToast("Password updated", "success");
-      if (isModal) {
+       if (isModal) {
         handleClose();
       } else {
-        const dest =
-          profile?.role === "admin"
-            ? "/admin/analytics"
-            : profile?.role === "agent"
-              ? "/agent/analytics"
-              : "/tickets";
-        navigate(dest, { replace: true });
+        navigate(homeRoute || "/tickets", { replace: true });
       }
     } catch (err) {
       showToast(
@@ -124,20 +112,17 @@ export default function ChangePassword({ isModal = false, isOpen = true, onClose
             }
             value={form.current}
             onChange={set("current")}
-            show={show}
           />
           <PasswordField
             label="New password"
             value={form.next}
             onChange={set("next")}
-            show={show}
             maxLength={MAX_LENGTH}
           />
           <PasswordField
             label="Confirm new password"
             value={form.confirm}
             onChange={set("confirm")}
-            show={show}
             maxLength={MAX_LENGTH}
           />
 
@@ -234,9 +219,8 @@ export default function ChangePassword({ isModal = false, isOpen = true, onClose
   );
 }
 
-function PasswordField({ label, value, onChange, show, maxLength }) {
+function PasswordField({ label, value, onChange, maxLength }) {
   const [reveal, setReveal] = useState(false);
-  const visible = show || reveal;
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-gray-300">
@@ -245,7 +229,7 @@ function PasswordField({ label, value, onChange, show, maxLength }) {
       <div className="relative">
         <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
         <input
-          type={visible ? "text" : "password"}
+          type={reveal ? "text" : "password"}
           required
           maxLength={maxLength}
           value={value}
@@ -256,10 +240,10 @@ function PasswordField({ label, value, onChange, show, maxLength }) {
         <button
           type="button"
           onClick={() => setReveal((v) => !v)}
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={reveal ? "Hide password" : "Show password"}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
         >
-          {visible ? (
+          {reveal ? (
             <EyeOff className="h-4 w-4" />
           ) : (
             <Eye className="h-4 w-4" />
