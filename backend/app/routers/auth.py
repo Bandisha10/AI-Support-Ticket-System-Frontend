@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -67,7 +68,8 @@ async def _apply_new_password(
         )
     except Exception as exc:
         logger.warning("Password update rejected for %s: %s", email, exc)
-        raise HTTPException(400, f"Password update rejected: {exc}")
+        raise HTTPException(400, "Password update rejected. Please try a different password.")
+
 
     result = await db.execute(select(User).where(User.email == email))
     profile = result.scalar_one_or_none()
@@ -81,7 +83,8 @@ async def _apply_new_password(
 async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
     if not settings.ALLOW_PUBLIC_SIGNUP:
         raise HTTPException(403, "Public signup is disabled. Ask an administrator for an account.")
-    
+    payload.email = payload.email.strip().lower()
+
     if is_company_domain(payload.email):
         domain = payload.email.rsplit("@", 1)[-1]
         raise HTTPException(
@@ -91,8 +94,8 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 
     try:
         res = supabase.auth.sign_up({"email": payload.email, "password": payload.password})
-    except Exception as e:
-        raise HTTPException(400, str(e))
+    except Exception:
+        raise HTTPException(400, "Signup failed. Please try again.")
 
     user = res.user
     if not user:
@@ -117,7 +120,6 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(new_user)
 
-
     try:
         await db.commit()
     except Exception:
@@ -134,15 +136,58 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 @limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     email = str(payload.email).strip().lower()
-    password = str(payload.password).strip()
+    password = str(payload.password) 
+
+    client = make_anon_client()
     try:
-        res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-    except Exception as e:
-        raise HTTPException(401, str(e))
+        res = client.auth.sign_in_with_password({"email": email, "password": password})
+    except Exception:
+        raise HTTPException(401, "Invalid email or password")
+    finally:
+        try:
+            client.auth.sign_out(options={"scope": "local"})
+        except Exception:
+            pass
+
     session = res.session
     user = res.user
     if session is None or user is None:
         raise HTTPException(401, "Invalid credentials")
+
+    result = await db.execute(select(User).where(User.id == user.id))
+    profile = result.scalar_one_or_none()
+    if profile is None:
+        raise HTTPException(404, "User profile not found. Please sign up first.")
+
+    return TokenResponse(
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
+        expires_in=session.expires_in,
+        user={
+            "id": str(user.id),
+            "email": user.email,
+            "role": profile.role.value,
+            "must_change_password": bool(profile.must_change_password),
+        },
+    )
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+    client = make_anon_client()
+    try:
+        res = client.auth.refresh_session(payload.refresh_token)
+    except Exception:
+        raise HTTPException(401, "Invalid or expired refresh token")
+    finally:
+        try:
+            client.auth.sign_out(options={"scope": "local"})
+        except Exception:
+            pass
+
+    session = res.session
+    user = res.user
+    if session is None or user is None:
+        raise HTTPException(401, "Invalid refresh token")
 
     result = await db.execute(select(User).where(User.id == user.id))
     profile = result.scalar_one_or_none()
@@ -158,25 +203,6 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
             "must_change_password": bool(profile.must_change_password) if profile else False,
         },
     )
-
-
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest):
-    try:
-        res = supabase.auth.refresh_session(payload.refresh_token)
-    except Exception as e:
-        raise HTTPException(401, str(e))
-    session = res.session
-    user = res.user
-    if session is None or user is None:
-        raise HTTPException(401, "Invalid refresh token")
-    return TokenResponse(
-        access_token=session.access_token,
-        refresh_token=session.refresh_token,
-        expires_in=session.expires_in,
-        user={"id": str(user.id), "email": user.email},
-    )
-
 
 @router.post("/logout")
 async def logout(
@@ -225,6 +251,37 @@ async def me(
         invited_at=current_user.invited_at,
         must_change_password=current_user.must_change_password,
     )
+
+@router.put("/me", response_model=UserRead)
+async def update_my_profile(
+    payload: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Allows the signed-in user to update their own contact information."""
+    if payload.first_name is not None:
+        current_user.first_name = payload.first_name.strip()
+    if payload.last_name is not None:
+        current_user.last_name = payload.last_name.strip()
+    if payload.phone_number is not None:
+        clean_phone = payload.phone_number.strip() or None
+        if clean_phone:
+            # Check if another user already has this phone number
+            existing = await db.execute(
+                select(User).where(User.phone_number == clean_phone, User.id != current_user.id)
+            )
+            if existing.scalar_one_or_none():
+                raise HTTPException(409, "This phone number is already in use by another account.")
+        current_user.phone_number = clean_phone
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "This phone number is already in use by another account.")
+
+    await db.refresh(current_user)
+    return await me(current_user=current_user, db=db)
 
 @router.post("/change-password", response_model=PasswordChangedResponse)
 async def change_password(
@@ -295,7 +352,7 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     except TokenInvalidError as exc:
         raise HTTPException(400, str(exc))
 
-    user_id = claims.get("sub")
+        user_id = claims.get("sub")
     try:
         parsed_id = UUID(user_id)
     except Exception:
@@ -306,6 +363,12 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     if user is None or not user.is_active:
         raise HTTPException(404, "User account not found or deactivated")
 
+
+    # Replay guard: reject if password was already changed after this token was issued
+    token_iat = claims.get("iat", 0)
+    if user.password_changed_at and user.password_changed_at.timestamp() > token_iat:
+        raise HTTPException(400, "This reset link has already been used. Request a new one.")
+
     await _apply_new_password(
         db,
         auth_user_id=str(user.id),
@@ -315,3 +378,4 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     return PasswordChangedResponse(
         message="Password updated successfully. Sign in with your new password."
     )
+

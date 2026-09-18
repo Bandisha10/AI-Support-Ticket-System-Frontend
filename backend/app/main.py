@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
+from backend.app.config import settings
 from backend.app.core.limiter import limiter
 from backend.app.routers import (
     auth, departments, users, sla_policies, tickets, replies,
@@ -25,13 +26,13 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
         headers={"Retry-After": "60"},
     )
 
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[settings.FRONTEND_URL],
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["WWW-Authenticate"],
+    allow_credentials=True,
 )
 
 app.include_router(auth.router)

@@ -114,12 +114,12 @@ def create_password_reset_token(email: str, user_id: str, expires_minutes: int =
     payload = {
         "sub": user_id,
         "email": email,
+        "aud": "password_reset",
         "purpose": "password_reset",
         "iat": int(now),
         "exp": int(now + (expires_minutes * 60)),
     }
     return jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
-
 
 def verify_password_reset_token(token: str) -> dict:
     """Verify the reset token's signature, expiration, and purpose."""
@@ -128,6 +128,7 @@ def verify_password_reset_token(token: str) -> dict:
             token,
             settings.SUPABASE_JWT_SECRET,
             algorithms=["HS256"],
+            audience="password_reset",
             options={"require_exp": True, "require_sub": True, "verify_iat": False},
             leeway=60,
         )

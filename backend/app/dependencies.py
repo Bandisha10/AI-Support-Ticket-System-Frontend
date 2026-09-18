@@ -129,11 +129,46 @@ async def get_current_user(
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
+
+    # JIT (just-in-time) provisioning for OAuth users (e.g. Google sign-in).
+    # Supabase creates auth.users but nothing creates public.users for OAuth.
     if not user:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, "User profile not found - complete signup"
+        email = claims.get("email")
+        if not email:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "User profile not found and token has no email claim.",
+            )
+        # Block company-domain users from self-provisioning via OAuth
+        from backend.app.core.roles import is_company_domain
+
+        if is_company_domain(email):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Agent accounts must be created by an administrator.",
+            )
+        user = User(
+            id=user_id,
+            email=email,
+            password_hash="MANAGED_BY_SUPABASE_AUTH",
+            role=UserRole.customer,
+            must_change_password=False,
         )
-        
+        db.add(user)
+        try:
+            await db.commit()
+            await db.refresh(user)
+        except Exception:
+            await db.rollback()
+            # Race condition: another request may have created the row
+            result = await db.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            if not user:
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "Failed to create user profile.",
+                )
+
     if not user.is_active:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "This account has been deactivated."
@@ -153,11 +188,8 @@ async def get_current_user(
     # Tag Sentry events with who made the request (id only — no PII by default).
     sentry_sdk.set_user({"id": str(user.id)})
     sentry_sdk.set_tag("user.role", user.role.value)
-    # To include email too (this IS PII, so opt in deliberately):
-    # sentry_sdk.set_user({"id": str(user.id), "email": user.email})
 
     return user
-
 
 def require_role(*roles: UserRole):
     async def checker(current_user: User = Depends(get_current_user)) -> User:
