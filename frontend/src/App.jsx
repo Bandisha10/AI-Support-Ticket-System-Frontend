@@ -4,6 +4,7 @@ import { NotificationProvider } from "./context/NotificationContext";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Layout from "./components/common/Layout";
 import { useAuth } from "./hooks/useAuth";
+import AuthCallback from "./pages/AuthCallback";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -21,6 +22,7 @@ import Analytics from "./pages/admin/Analytics";
 import Settings from "./pages/admin/Settings";
 import AdminTicketPanel from "./pages/admin/TicketPanel";
 import TicketHistory from "./pages/customer/TicketHistory";
+import CompleteProfile from "./pages/CompleteProfile";
 
 function HomeRedirect() {
   const { homeRoute } = useAuth();
@@ -34,10 +36,14 @@ export default function App() {
         <NotificationProvider>
           <Routes>
             {/* Public Routes */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/complete-profile" element={<CompleteProfile />} />
+            </Route>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/faq" element={<FAQ />} />
 
             {/* Signed in, but still on temporary password */}

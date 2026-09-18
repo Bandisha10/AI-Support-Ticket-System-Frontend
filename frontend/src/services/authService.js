@@ -11,14 +11,9 @@ export async function register(payload) {
 }
 
 export async function logout() {
-  try {
-    await api.post("/auth/logout");
-  } finally {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("user");
-  }
+  await api.post("/auth/logout");
 }
+
 
 export async function fetchCurrentUser() {
   const { data } = await api.get("/auth/me");
@@ -53,5 +48,10 @@ export async function resetPassword(token, newPassword) {
     token,
     new_password: newPassword,
   });
+  return data;
+}
+
+export async function updateProfile(payload) {
+  const { data } = await api.put("/auth/me", payload);
   return data;
 }
