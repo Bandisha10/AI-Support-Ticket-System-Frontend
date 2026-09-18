@@ -27,6 +27,7 @@ import { formatRelativeTime, formatDateTime } from "../../utils/formatters";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "./Toast";
 import * as authService from "../../services/authService";
+import ChangePassword from "../../pages/ChangePassword";
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export default function Sidebar() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } =
     useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const notifMenuRef = useRef(null);
 
   // User Card Popup State & Ref
@@ -72,26 +74,6 @@ export default function Sidebar() {
     setShowUserPopup(false);
     await logout();
     navigate("/login");
-  }
-
-  async function handleForgotPassword() {
-    if (!user?.email) {
-      showToast("No email address found for this user account.", "error");
-      return;
-    }
-    setSendingReset(true);
-    try {
-      await authService.forgotPassword(user.email);
-      showToast(`Password reset link sent to ${user.email}`, "success");
-    } catch (err) {
-      const msg =
-        err.response?.data?.detail?.[0]?.msg ||
-        err.response?.data?.detail ||
-        "Could not send reset verification email";
-      showToast(msg, "error");
-    } finally {
-      setSendingReset(false);
-    }
   }
 
   // RBAC: Dynamically set nav items based on user role
@@ -421,18 +403,14 @@ export default function Sidebar() {
               {!isAdmin && (
                 <button
                   type="button"
-                  onClick={handleForgotPassword}
-                  disabled={sendingReset}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-200 bg-[#1a1e2d] hover:bg-[#22283a] hover:text-[#f2b705] border border-[#2b3145] transition-all cursor-pointer disabled:opacity-60"
+                  onClick={() => {
+                    setShowUserPopup(false);
+                    setShowChangePasswordModal(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-gray-200 bg-[#1a1e2d] hover:bg-[#22283a] hover:text-[#f2b705] border border-[#2b3145] transition-all cursor-pointer"
                 >
-                  {sendingReset ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#f2b705]" />
-                  ) : (
-                    <KeyRound className="h-3.5 w-3.5 text-[#f2b705]" />
-                  )}
-                  <span>
-                    {sendingReset ? "Sending Reset Link…" : "Forgot Password?"}
-                  </span>
+                  <KeyRound className="h-3.5 w-3.5 text-[#f2b705]" />
+                  <span>Change Password</span>
                 </button>
               )}
 
@@ -448,6 +426,11 @@ export default function Sidebar() {
           </div>
         )}
       </div>
+      <ChangePassword
+        isModal
+        isOpen={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
     </div>
   );
 }

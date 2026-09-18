@@ -13,7 +13,7 @@ venv/
 backend/app/ai/models/
 backend/alembic/
 myREADME.md
-.gitignore
 "requirements copy.txt"
 requirements copy.txt
 .vite
+AGENTS.md
