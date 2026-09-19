@@ -92,60 +92,89 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
             f"User with @{domain} cannot create account here. Agent accounts are created by an administrator.",
         )
 
+    # Check if user already exists in DB
+    existing_user = await db.execute(select(User).where(User.email == payload.email))
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(409, "Email already registered")
+
     try:
-        res = supabase.auth.sign_up({"email": payload.email, "password": payload.password})
-    except Exception:
+        res = await run_in_threadpool(
+            supabase_admin.auth.admin.create_user,
+            {
+                "email": payload.email,
+                "password": payload.password,
+                "email_confirm": True,
+                "user_metadata": {
+                    "first_name": payload.first_name,
+                    "last_name": payload.last_name,
+                }
+            }
+        )
+    except Exception as exc:
+        err_str = str(exc).lower()
+        if "already registered" in err_str or "already exists" in err_str or "duplicate" in err_str:
+            raise HTTPException(409, "Email already registered")
+        logger.exception("Supabase signup error for %s: %s", payload.email, exc)
         raise HTTPException(400, "Signup failed. Please try again.")
 
     user = res.user
     if not user:
         raise HTTPException(400, "Signup failed")
 
-    if not getattr(user, "identities", None):
-        raise HTTPException(409, "Email already registered")
+    email = user.email or payload.email
 
-    email = user.email
-    if not email:
-        raise HTTPException(400, "Signup succeeded but returned no email address.")
+    # Check if Supabase DB trigger already created the user row in public.users
+    result = await db.execute(select(User).where(User.id == user.id))
+    profile = result.scalar_one_or_none()
 
-    new_user = User(
-        id=user.id,
-        email=email,
-        password_hash="MANAGED_BY_SUPABASE_AUTH",
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        phone_number=payload.phone_number,
-        role=UserRole.customer,
-        must_change_password=False,
-    )
-    db.add(new_user)
+    if profile:
+        profile.first_name = payload.first_name
+        profile.last_name = payload.last_name
+        profile.phone_number = payload.phone_number
+        profile.role = UserRole.customer
+        profile.must_change_password = False
+    else:
+        profile = User(
+            id=user.id,
+            email=email,
+            password_hash="MANAGED_BY_SUPABASE_AUTH",
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            phone_number=payload.phone_number,
+            role=UserRole.customer,
+            must_change_password=False,
+        )
+        db.add(profile)
 
     try:
         await db.commit()
     except Exception:
         await db.rollback()
         try:
-            supabase_admin.auth.admin.delete_user(user.id)
+            await run_in_threadpool(supabase_admin.auth.admin.delete_user, user.id)
         except Exception:
             logger.exception("Failed to clean up auth user %s after DB error", user.id)
         raise HTTPException(409, "Email already registered")
-    await db.refresh(new_user)
-    return {"message": "Signup successful", "user_id": str(new_user.id)}
+    await db.refresh(profile)
+    return {"message": "Signup successful", "user_id": str(profile.id)}
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
-    email = str(payload.email).strip().lower()
-    password = str(payload.password) 
+    email = payload.email.strip().lower()
+    password = payload.password 
 
     client = make_anon_client()
     try:
-        res = client.auth.sign_in_with_password({"email": email, "password": password})
+        res = await run_in_threadpool(
+            client.auth.sign_in_with_password,
+            {"email": email, "password": password}
+        )
     except Exception:
         raise HTTPException(401, "Invalid email or password")
     finally:
         try:
-            client.auth.sign_out(options={"scope": "local"})
+            await run_in_threadpool(client.auth.sign_out, {"scope": "local"})
         except Exception:
             pass
 
@@ -164,10 +193,10 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
         refresh_token=session.refresh_token,
         expires_in=session.expires_in,
         user={
-            "id": str(user.id),
+            "id": user.id,
             "email": user.email,
             "role": profile.role.value,
-            "must_change_password": bool(profile.must_change_password),
+            "must_change_password": profile.must_change_password,
         },
     )
 
@@ -197,10 +226,10 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
         refresh_token=session.refresh_token,
         expires_in=session.expires_in,
         user={
-            "id": str(user.id),
+            "id": user.id,
             "email": user.email,
             "role": profile.role.value if profile else None,
-            "must_change_password": bool(profile.must_change_password) if profile else False,
+            "must_change_password": profile.must_change_password if profile else False,
         },
     )
 
@@ -308,7 +337,7 @@ async def change_password(
 @limiter.limit("5/hour")
 async def forgot_password(request:Request,payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     """Send a verification email with a reset link."""
-    email = str(payload.email).strip().lower()
+    email = payload.email.strip().lower()
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -352,7 +381,7 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     except TokenInvalidError as exc:
         raise HTTPException(400, str(exc))
 
-        user_id = claims.get("sub")
+    user_id = claims.get("sub")
     try:
         parsed_id = UUID(user_id)
     except Exception:
@@ -362,7 +391,6 @@ async def reset_password(payload: ResetPasswordRequest, db: AsyncSession = Depen
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(404, "User account not found or deactivated")
-
 
     # Replay guard: reject if password was already changed after this token was issued
     token_iat = claims.get("iat", 0)

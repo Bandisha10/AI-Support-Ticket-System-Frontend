@@ -226,14 +226,6 @@ export default function TicketTable({
           <table className="w-full text-left text-sm whitespace-nowrap">
             <thead className="border-b border-surface-border text-xs uppercase text-gray-500">
               <tr>
-                <th className="py-2.5 px-3 w-8">
-                  <input
-                    type="checkbox"
-                    checked={allFilteredSelected}
-                    onChange={toggleSelectAll}
-                    className="rounded border-surface-border bg-surface-bg text-accent focus:ring-0 cursor-pointer"
-                  />
-                </th>
                 <th className="py-2.5 px-3">Subject</th>
                 <th className="py-2.5 px-3">Customer</th>
                 <th className="py-2.5 px-3">Priority</th>
@@ -245,23 +237,11 @@ export default function TicketTable({
             </thead>
             <tbody>
               {filteredTickets.map((t) => {
-                const isSelected = selectedTicketIds.has(t.id);
                 return (
                   <tr
                     key={t.id}
-                    className={clsx(
-                      "border-b border-surface-border last:border-0 transition-colors",
-                      isSelected ? "bg-accent/5" : "hover:bg-surface-hover"
-                    )}
+                    className="border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors"
                   >
-                    <td className="py-3 px-3">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleSelectRow(t.id)}
-                        className="rounded border-surface-border bg-surface-bg text-accent focus:ring-0 cursor-pointer"
-                      />
-                    </td>
                     <td className="py-3 px-3 whitespace-normal min-w-[240px]">
                       <Link
                         to={`/agent/tickets/${t.id}`}

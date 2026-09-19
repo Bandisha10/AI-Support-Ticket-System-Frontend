@@ -9,6 +9,7 @@ import {
   AlertCircle,
   TrendingUp,
   RefreshCw,
+  Calendar,
 } from "lucide-react";
 import * as ticketService from "../../services/ticketService";
 import { useToast } from "../../components/common/Toast";
@@ -19,7 +20,15 @@ export default function AgentAnalytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dateRange, setDateRange] = useState("all"); // "week" | "month" | "all"
+  const [dateRange, setDateRange] = useState("custom"); // "week" | "month" | "custom"
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   useEffect(() => {
     loadAnalytics(true);
@@ -28,15 +37,20 @@ export default function AgentAnalytics() {
       loadAnalytics(false);
     }, 12000);
     return () => clearInterval(interval);
-  }, [dateRange]);
+  }, [dateRange, startDate, endDate]);
 
   async function loadAnalytics(isInitial = false) {
     if (isInitial) setLoading(true);
     else setIsRefreshing(true);
     try {
-      const res = await ticketService.getAgentAnalytics({
-        date_range: dateRange !== "all" ? dateRange : undefined,
-      });
+      const params = {
+        date_range: dateRange,
+      };
+      if (dateRange === "custom") {
+        params.start_date = startDate;
+        params.end_date = endDate;
+      }
+      const res = await ticketService.getAgentAnalytics(params);
       setData(res);
     } catch (err) {
       console.error("Failed to load agent analytics", err);
@@ -50,11 +64,16 @@ export default function AgentAnalytics() {
     if (!data) return;
 
     try {
+      const rangeLabel =
+        dateRange === "custom"
+          ? `CUSTOM (${startDate} to ${endDate})`
+          : dateRange.toUpperCase();
+
       let csv = "Deskwise Individual Agent Performance Report\n";
       csv += `Generated at,${new Date().toISOString()}\n`;
       csv += `Agent Name,${data.agent_name}\n`;
       csv += `Agent Email,${data.agent_email}\n`;
-      csv += `Date Range,${dateRange.toUpperCase()}\n\n`;
+      csv += `Date Range,${rangeLabel}\n\n`;
 
       csv += "OVERALL METRICS\n";
       csv += "Metric,Value\n";
@@ -178,37 +197,62 @@ export default function AgentAnalytics() {
           )}
 
           {/* Date Range Selector */}
-          <div className="flex items-center rounded-xl border border-[#232632] bg-[#141824] p-1">
-            <button
-              onClick={() => setDateRange("week")}
-              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                dateRange === "week"
-                  ? "bg-[#f2b705] text-black font-semibold"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              This Week
-            </button>
-            <button
-              onClick={() => setDateRange("month")}
-              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                dateRange === "month"
-                  ? "bg-[#f2b705] text-black font-semibold"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              This Month
-            </button>
-            <button
-              onClick={() => setDateRange("all")}
-              className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
-                dateRange === "all"
-                  ? "bg-[#f2b705] text-black font-semibold"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              All Time
-            </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-xl border border-[#232632] bg-[#141824] p-1">
+              <button
+                onClick={() => setDateRange("week")}
+                className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                  dateRange === "week"
+                    ? "bg-[#f2b705] text-black font-semibold shadow-sm"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                This Week
+              </button>
+              <button
+                onClick={() => setDateRange("month")}
+                className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                  dateRange === "month"
+                    ? "bg-[#f2b705] text-black font-semibold shadow-sm"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                This Month
+              </button>
+              <button
+                onClick={() => setDateRange("custom")}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium transition-colors ${
+                  dateRange === "custom"
+                    ? "bg-[#f2b705] text-black font-semibold shadow-sm"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Custom Date</span>
+              </button>
+            </div>
+
+            {/* Custom Date Range Picker (Calendar Based) */}
+            {dateRange === "custom" && (
+              <div className="flex items-center gap-2 rounded-xl border border-[#232632] bg-[#141824] px-3 py-1 animate-in fade-in">
+                <Calendar className="h-3.5 w-3.5 text-[#f2b705] shrink-0" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent text-xs text-white border-0 focus:outline-none [color-scheme:dark] cursor-pointer"
+                  title="Start Date"
+                />
+                <span className="text-gray-500 text-xs">to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent text-xs text-white border-0 focus:outline-none [color-scheme:dark] cursor-pointer"
+                  title="End Date"
+                />
+              </div>
+            )}
           </div>
 
           {/* Export CSV Button */}

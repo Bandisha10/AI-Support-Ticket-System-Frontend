@@ -143,14 +143,49 @@ async def list_tickets(
     ]
 
 
+def _build_date_filters(
+    date_range: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    base_filters: list | None = None,
+) -> list:
+    filters = list(base_filters) if base_filters else []
+    now = datetime.now()
+    if date_range == "week":
+        filters.append(Ticket.created_at >= now - timedelta(days=7))
+    elif date_range == "month":
+        filters.append(Ticket.created_at >= now - timedelta(days=30))
+    elif date_range == "custom" or start_date or end_date:
+        if start_date:
+            try:
+                s_dt = datetime.fromisoformat(start_date.replace("Z", ""))
+                filters.append(Ticket.created_at >= datetime(s_dt.year, s_dt.month, s_dt.day, 0, 0, 0))
+            except Exception:
+                pass
+        if end_date:
+            try:
+                e_dt = datetime.fromisoformat(end_date.replace("Z", ""))
+                filters.append(Ticket.created_at <= datetime(e_dt.year, e_dt.month, e_dt.day, 23, 59, 59))
+            except Exception:
+                pass
+    return filters
+
 @router.get("/analytics")
-async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User = Depends(require_role(UserRole.admin, UserRole.agent))):
+async def get_analytics(
+    date_range: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.admin, UserRole.agent))
+):
     now = datetime.now()
     five_days_ago = now - timedelta(days=5)
     ten_days_ago = now - timedelta(days=10)
 
+    filters = _build_date_filters(date_range, start_date, end_date)
+
     # 1. Totals & Trend
-    total_query = select(sa_func.count()).select_from(Ticket)
+    total_query = select(sa_func.count()).select_from(Ticket).where(*filters)
     total_tickets = (await db.execute(total_query)).scalar() or 0
 
     recent_query = select(sa_func.count()).select_from(Ticket).where(Ticket.created_at >= five_days_ago)
@@ -165,9 +200,14 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
         total_tickets_trend = 100.0 if recent_tickets > 0 else 0.0
 
     # 2. Status Counts
-    status_counts_query = select(Ticket.status, sa_func.count()).group_by(Ticket.status)
+    status_counts_query = (
+        select(Ticket.status, sa_func.count())
+        .select_from(Ticket)
+        .where(*filters)
+        .group_by(Ticket.status)
+    )
     status_counts_rows = (await db.execute(status_counts_query)).all()
-    status_counts = {k.name: v for k, v in status_counts_rows}
+    status_counts = {k.name if hasattr(k, "name") else str(k): v for k, v in status_counts_rows}
 
     open_count = status_counts.get("open", 0)
     in_progress_count = status_counts.get("in_progress", 0)
@@ -183,13 +223,24 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
         {"name": "closed", "count": closed_count},
     ]
 
-    # 3. Department Breakdown (was Category — model now predicts department directly)
-    dept_query = select(Department.name, sa_func.count()).select_from(Ticket).join(Department, Ticket.department_id == Department.id).group_by(Department.name)
+    # 3. Department Breakdown
+    dept_query = (
+        select(Department.name, sa_func.count())
+        .select_from(Ticket)
+        .join(Department, Ticket.department_id == Department.id)
+        .where(*filters)
+        .group_by(Department.name)
+    )
     dept_rows = (await db.execute(dept_query)).all()
     tickets_by_category = [{"name": r[0], "count": r[1]} for r in dept_rows]
 
-        # 4. CSAT (Average Rating)
-    csat_query = select(sa_func.avg(TicketRating.rating)).select_from(TicketRating)
+    # 4. CSAT (Average Rating)
+    csat_query = (
+        select(sa_func.avg(TicketRating.rating))
+        .select_from(TicketRating)
+        .join(Ticket, TicketRating.ticket_id == Ticket.id)
+        .where(*filters)
+    )
     csat_val = (await db.execute(csat_query)).scalar()
     csat = round(float(csat_val), 1) if csat_val is not None else None
 
@@ -207,10 +258,11 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
         .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
         .where(
             User.role == UserRole.agent,
-            User.must_change_password.is_(False),  # Exclude agents still in invited/pending state
+            User.must_change_password.is_(False),
+            *filters
         )
         .group_by(User.id, User.email)
-        .having(sa_func.sum(case((Ticket.status == TicketStatus.closed, 1), else_=0)) > 0)  # Optional: only show agents with closed tickets
+        .having(sa_func.sum(case((Ticket.status == TicketStatus.closed, 1), else_=0)) > 0)
         .order_by(sa_func.sum(case((Ticket.status == TicketStatus.closed, 1), else_=0)).desc())
     )
 
@@ -225,14 +277,14 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
             "name": row[1].split('@')[0],
             "unresolved_count": int(row[2] or 0),
             "closed_count": int(row[3] or 0),
-            "avg_time": "1h", # Placeholder
+            "avg_time": "1h",
             "rating": agent_rating
         })
 
     return {
         "total_tickets": total_tickets,
         "total_tickets_trend": total_tickets_trend,
-        "avg_response_label": "1h 30m", # Placeholder
+        "avg_response_label": "1h 30m",
         "avg_response_trend": 0.0,
         "resolved_count": resolved_count,
         "closed_count": closed_count,
@@ -248,17 +300,16 @@ async def get_analytics(db: AsyncSession = Depends(get_db), current_user: User =
 @router.get("/analytics/agent")
 async def get_agent_analytics(
     date_range: str | None = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.agent, UserRole.admin)),
 ):
     """Analytics for an individual agent based on tickets assigned to them."""
     now = datetime.now()
-    filters = [Ticket.assigned_agent_id == current_user.id]
-
-    if date_range == "week":
-        filters.append(Ticket.created_at >= now - timedelta(days=7))
-    elif date_range == "month":
-        filters.append(Ticket.created_at >= now - timedelta(days=30))
+    filters = _build_date_filters(
+        date_range, start_date, end_date, [Ticket.assigned_agent_id == current_user.id]
+    )
 
     # 1. Total Assigned Tickets
     total_query = select(sa_func.count()).select_from(Ticket).where(*filters)

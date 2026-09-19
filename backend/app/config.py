@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
 
     model_config = SettingsConfigDict(
-        env_file=ENV_FILE,
+        env_file=(ENV_FILE, ROOT_DIR / "backend" / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
