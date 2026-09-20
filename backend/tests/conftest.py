@@ -10,7 +10,7 @@ from backend.app.config import settings
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user
 from backend.app.main import app
-from backend.app.models.enums import UserRole
+from backend.app.models.enums import AgentTier, UserRole
 from backend.app.models.user import User
 
 
@@ -30,6 +30,9 @@ def mock_db_session():
             obj.created_at = datetime.now(timezone.utc)
         if not getattr(obj, "updated_at", None):
             obj.updated_at = datetime.now(timezone.utc)
+        if getattr(obj, "agent_tier", None) is None and getattr(obj, "role", None)==UserRole.agent:
+            obj.agent_tier = AgentTier.regular
+
 
     session.refresh = AsyncMock(side_effect=fake_refresh)
     return session
@@ -42,6 +45,8 @@ def admin_user():
         id=uuid.uuid4(),
         email="admin@test.com",
         role=UserRole.admin,
+        agent_tier=None,
+        created_at=datetime.now(timezone.utc),
         is_active=True,
         must_change_password=False,
         department_id=None,
@@ -54,6 +59,8 @@ def agent_user():
         id=uuid.uuid4(),
         email="agent@ritgoa.ac.in",
         role=UserRole.agent,
+        agent_tier=AgentTier.regular,
+        created_at=datetime.now(timezone.utc),
         is_active=True,
         must_change_password=False,
         department_id=uuid.uuid4(),
@@ -66,11 +73,12 @@ def customer_user():
         id=uuid.uuid4(),
         email="customer@example.com",
         role=UserRole.customer,
+        agent_tier=None,
+        created_at=datetime.now(timezone.utc),
         is_active=True,
         must_change_password=False,
         department_id=None,
     )
-
 
 @pytest.fixture
 def client(mock_db_session):

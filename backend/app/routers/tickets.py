@@ -322,6 +322,7 @@ async def get_agent_analytics(
         .where(*filters)
         .group_by(Ticket.status)
     )
+
     status_rows = (await db.execute(status_query)).all()
     status_counts = {k.name if hasattr(k, "name") else str(k): v for k, v in status_rows}
 
@@ -338,6 +339,7 @@ async def get_agent_analytics(
         {"name": "resolved", "count": resolved_count},
         {"name": "closed", "count": closed_count},
     ]
+
 
     # 3. Priority Breakdown
     priority_query = (

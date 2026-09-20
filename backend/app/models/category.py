@@ -8,4 +8,3 @@ class Category(Base):
     __tablename__ = "categories"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default="gen_random_uuid()")
     name: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    description: Mapped[str | None] = mapped_column(String, nullable=True)

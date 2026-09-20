@@ -10,7 +10,7 @@ class UserRead(BaseModel):
     email: EmailStr
     first_name: str | None = None
     last_name: str | None = None
-    agent_tier: AgentTier = AgentTier.regular
+    agent_tier: AgentTier | None = None
     role: UserRole
     department_id: UUID | None = None
     department_name: str | None = None
