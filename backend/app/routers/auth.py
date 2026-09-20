@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
@@ -92,11 +92,21 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
             f"User with @{domain} cannot create account here. Agent accounts are created by an administrator.",
         )
 
+    # Lines 95 to 167 in backend/app/routers/auth.py
     # Check if user already exists in DB
     existing_user = await db.execute(select(User).where(User.email == payload.email))
     if existing_user.scalar_one_or_none():
         raise HTTPException(409, "Email already registered")
 
+    # Pre-check phone uniqueness BEFORE creating account in Supabase
+    if payload.phone_number:
+        existing_phone = await db.execute(
+            select(User).where(User.phone_number == payload.phone_number)
+        )
+        if existing_phone.scalar_one_or_none():
+            raise HTTPException(409, "Phone number is already registered with another account")
+
+    user_uuid = None
     try:
         res = await run_in_threadpool(
             supabase_admin.auth.admin.create_user,
@@ -115,16 +125,17 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
         if "already registered" in err_str or "already exists" in err_str or "duplicate" in err_str:
             raise HTTPException(409, "Email already registered")
         logger.exception("Supabase signup error for %s: %s", payload.email, exc)
-        raise HTTPException(400, "Signup failed. Please try again.")
+        raise HTTPException(400, f"Signup failed: {exc}")
 
     user = res.user
     if not user:
         raise HTTPException(400, "Signup failed")
 
+    user_uuid = UUID(str(user.id))
     email = user.email or payload.email
 
     # Check if Supabase DB trigger already created the user row in public.users
-    result = await db.execute(select(User).where(User.id == user.id))
+    result = await db.execute(select(User).where(User.id == user_uuid))
     profile = result.scalar_one_or_none()
 
     if profile:
@@ -135,7 +146,7 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
         profile.must_change_password = False
     else:
         profile = User(
-            id=user.id,
+            id=user_uuid,
             email=email,
             password_hash="MANAGED_BY_SUPABASE_AUTH",
             first_name=payload.first_name,
@@ -148,15 +159,21 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 
     try:
         await db.commit()
-    except Exception:
+        await db.refresh(profile)
+        return {"message": "Signup successful", "user_id": str(profile.id)}
+    except IntegrityError:
         await db.rollback()
-        try:
-            await run_in_threadpool(supabase_admin.auth.admin.delete_user, user.id)
-        except Exception:
-            logger.exception("Failed to clean up auth user %s after DB error", user.id)
-        raise HTTPException(409, "Email already registered")
-    await db.refresh(profile)
-    return {"message": "Signup successful", "user_id": str(profile.id)}
+        # Clean both public.users trigger row and Supabase Auth
+        await db.execute(delete(User).where(User.id == user_uuid))
+        await db.commit()
+        await run_in_threadpool(supabase_admin.auth.admin.delete_user, str(user.id))
+        raise HTTPException(409, "Phone number or email is already registered")
+    except Exception as exc:
+        await db.rollback()
+        await db.execute(delete(User).where(User.id == user_uuid))
+        await db.commit()
+        await run_in_threadpool(supabase_admin.auth.admin.delete_user, str(user.id))
+        raise HTTPException(500, f"Database save failed: {exc}")
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
@@ -272,7 +289,7 @@ async def me(
         role=current_user.role,
         department_id=current_user.department_id,
         department_name=department_name,
-        created_at=current_user.created_at,
+        created_at=current_user.created_at or datetime.now(timezone.utc),
         is_active=current_user.is_active,
         phone_number=current_user.phone_number,
         invited_by=current_user.invited_by,
@@ -280,6 +297,7 @@ async def me(
         invited_at=current_user.invited_at,
         must_change_password=current_user.must_change_password,
     )
+
 
 @router.put("/me", response_model=UserRead)
 async def update_my_profile(

@@ -15,7 +15,7 @@ from backend.app.core.security import (
     decode_supabase_jwt,
 )
 from backend.app.database import get_db
-from backend.app.models.enums import UserRole
+from backend.app.models.enums import AgentTier, UserRole
 from backend.app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -152,8 +152,11 @@ async def get_current_user(
             email=email,
             password_hash="MANAGED_BY_SUPABASE_AUTH",
             role=UserRole.customer,
+            agent_tier=None,
+            is_active=True,
             must_change_password=False,
         )
+
         db.add(user)
         try:
             await db.commit()
