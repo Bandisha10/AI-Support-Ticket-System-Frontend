@@ -38,12 +38,14 @@ def test_verify_password_reset_token_wrong_purpose():
     payload = {
         "sub": str(uuid.uuid4()),
         "email": "user@example.com",
+        "aud": "password_reset",
         "purpose": "login",
         "exp": int(time.time()) + 300,
     }
     token = jwt.encode(payload, settings.SUPABASE_JWT_SECRET, algorithm="HS256")
     with pytest.raises(TokenInvalidError, match="Invalid token purpose"):
         verify_password_reset_token(token)
+
 
 
 def test_decode_supabase_jwt_missing_sub_raises():

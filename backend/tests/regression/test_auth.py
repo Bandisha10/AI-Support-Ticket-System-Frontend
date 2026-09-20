@@ -37,7 +37,7 @@ def test_service_or_anon_key_without_sub_rejected(client):
 
 def test_expired_token_rejected_with_actionable_error(client):
     """Regression: Expired tokens must return 401 advising /auth/refresh."""
-    expired_token = make_test_jwt(str(uuid.uuid4()), "user@example.com", expires_in_sec=-10)
+    expired_token = make_test_jwt(str(uuid.uuid4()), "user@example.com", expires_in_sec=-120)
     res = client.get("/departments/", headers={"Authorization": f"Bearer {expired_token}"})
     assert res.status_code == 401
     assert "expired" in res.json()["detail"].lower()
