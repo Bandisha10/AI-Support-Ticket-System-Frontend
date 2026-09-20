@@ -1,5 +1,6 @@
 import { createContext, useEffect, useState } from "react";
 import * as authService from "../services/authService";
+import { supabase } from "../utils/supabase";
 
 export const AuthContext = createContext(null);
 
@@ -23,7 +24,10 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     // 1) exchange credentials for tokens
-    const { access_token, refresh_token } = await authService.login(email, password);
+    const { access_token, refresh_token } = await authService.login(
+      email,
+      password,
+    );
     localStorage.setItem("access_token", access_token);
     if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
     // 2) role + must_change_password live in public.users -> fetch /auth/me
@@ -37,6 +41,7 @@ export function AuthProvider({ children }) {
   async function logout() {
     try {
       await authService.logout();
+      await supabase.auth.signOut().catch(() => {});
     } finally {
       clearSession();
     }
@@ -82,7 +87,10 @@ export function AuthProvider({ children }) {
 
 function withDisplayName(profile) {
   if (!profile) return profile;
-  const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ").trim();
+  const fullName = [profile.first_name, profile.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   return {
     ...profile,
     name: fullName || profile.email?.split("@")[0] || "User",

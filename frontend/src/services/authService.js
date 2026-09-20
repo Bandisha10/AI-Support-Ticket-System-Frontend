@@ -10,6 +10,12 @@ export async function register(payload) {
   return data;
 }
 
+export async function refreshSession(refreshToken) {
+  const { data } = await api.post("/auth/refresh", { refresh_token: refreshToken });
+  return data;
+}
+
+
 export async function logout() {
   await api.post("/auth/logout");
 }
