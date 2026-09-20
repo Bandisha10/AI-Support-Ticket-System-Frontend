@@ -33,10 +33,3 @@ async def update_state(state_id: UUID, payload: SLAStateUpdate, db: AsyncSession
     if not obj:
         raise HTTPException(404, "SLA state not found")
     return await crud.update(db, obj, payload.model_dump(exclude_unset=True))
-
-@router.delete("/{state_id}", status_code=204, dependencies=[Depends(require_role(UserRole.admin))])
-async def delete_state(state_id: UUID, db: AsyncSession = Depends(get_db)):
-    obj = await crud.get(db, state_id)
-    if not obj:
-        raise HTTPException(404, "SLA state not found")
-    await crud.delete(db, obj)

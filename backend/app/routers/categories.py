@@ -33,10 +33,3 @@ async def update_category(category_id: UUID, payload: CategoryUpdate, db: AsyncS
     if not obj:
         raise HTTPException(404, "Category not found")
     return await crud.update(db, obj, payload.model_dump(exclude_unset=True))
-
-@router.delete("/{category_id}", status_code=204, dependencies=[Depends(require_role(UserRole.admin))])
-async def delete_category(category_id: UUID, db: AsyncSession = Depends(get_db)):
-    obj = await crud.get(db, category_id)
-    if not obj:
-        raise HTTPException(404, "Category not found")
-    await crud.delete(db, obj)

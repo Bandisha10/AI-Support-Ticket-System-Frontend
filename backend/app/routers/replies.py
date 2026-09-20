@@ -22,15 +22,13 @@ async def create_reply(payload: ReplyCreate, db: AsyncSession = Depends(get_db),
     )).scalar_one_or_none()
     if not ticket:
         raise HTTPException(404, "Ticket not found")
+
     # Customers can only reply to their own tickets
     if current_user.role == UserRole.customer:
         if ticket.customer_id != current_user.id:
             raise HTTPException(403, "Not allowed to reply to this ticket")
-    # Agents can only reply to tickets in their department
-    elif current_user.role == UserRole.agent:
-        if ticket.department_id != current_user.department_id:
-            raise HTTPException(403, "Ticket is not in your department")
-    # Admins can reply to any ticket (no additional check needed)
+
+    # Agents can only reply to tickets in their department or assigned to them
     elif current_user.role == UserRole.agent:
         is_in_dept = ticket.department_id is not None and ticket.department_id == current_user.department_id
         is_assigned = ticket.assigned_agent_id == current_user.id
