@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "Deskwise"
     FRONTEND_URL: str = "http://localhost:5173"
+    FORCE_HTTPS: bool = False
+
 
     # backend/app/config.py
     ALLOW_PUBLIC_SIGNUP: bool = True
