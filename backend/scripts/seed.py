@@ -41,7 +41,7 @@ SLA_POLICIES = [
 ]
 
 ADMIN_EMAIL = "admin@test.com"
-ADMIN_PASSWORD = "Passw0rd!"
+ADMIN_PASSWORD = "Admin@123456"
 
 
 async def seed():
