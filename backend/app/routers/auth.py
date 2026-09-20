@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,38 @@ from backend.app.core.limiter import limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=settings.FORCE_HTTPS or settings.FRONTEND_URL.startswith("https"),
+        samesite="lax",
+        path="/auth/refresh",
+        max_age=30 * 24 * 3600,  # 30 days
+    )
+
+
+def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=settings.FRONTEND_URL.startswith("https"),
+        samesite="lax",
+        path="/auth/refresh",
+        max_age=30 * 24 * 3600,  # 30 days
+    )
+
+
+def _delete_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key="refresh_token",
+        path="/auth/refresh",
+        httponly=True,
+        samesite="lax",
+    )
 
 def _verify_password(email: str, password: str):
     """Confirm a password against Supabase Auth and return the auth user."""
@@ -92,7 +124,6 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
             f"User with @{domain} cannot create account here. Agent accounts are created by an administrator.",
         )
 
-    # Lines 95 to 167 in backend/app/routers/auth.py
     # Check if user already exists in DB
     existing_user = await db.execute(select(User).where(User.email == payload.email))
     if existing_user.scalar_one_or_none():
@@ -177,7 +208,12 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(
+    request: Request,
+    response: Response,
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
     email = payload.email.strip().lower()
     password = payload.password 
 
@@ -205,6 +241,9 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     if profile is None:
         raise HTTPException(404, "User profile not found. Please sign up first.")
 
+    # Attach HttpOnly cookie scoped strictly to /auth/refresh
+    _set_refresh_cookie(response, session.refresh_token)
+
     return TokenResponse(
         access_token=session.access_token,
         refresh_token=session.refresh_token,
@@ -218,11 +257,22 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
     )
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
+async def refresh(
+    request: Request,
+    response: Response,
+    payload: RefreshRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    # Prefer HttpOnly cookie; fallback to request body for non-browser/OAuth clients
+    token = request.cookies.get("refresh_token") or (payload.refresh_token if payload else None)
+    if not token:
+        raise HTTPException(401, "Missing refresh token")
+
     client = make_anon_client()
     try:
-        res = client.auth.refresh_session(payload.refresh_token)
+        res = client.auth.refresh_session(token)
     except Exception:
+        _delete_refresh_cookie(response)
         raise HTTPException(401, "Invalid or expired refresh token")
     finally:
         try:
@@ -233,7 +283,10 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
     session = res.session
     user = res.user
     if session is None or user is None:
+        _delete_refresh_cookie(response)
         raise HTTPException(401, "Invalid refresh token")
+
+    _set_refresh_cookie(response, session.refresh_token)
 
     result = await db.execute(select(User).where(User.id == user.id))
     profile = result.scalar_one_or_none()
@@ -252,9 +305,12 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/logout")
 async def logout(
+    response: Response,
     token: str = Depends(get_access_token),
     claims: dict = Depends(get_token_claims),
 ):
+    # Clear the refresh cookie on logout
+    _delete_refresh_cookie(response)
     revoked = True
     try:
         await run_in_threadpool(supabase_admin.auth.admin.sign_out, token, "local")
@@ -262,6 +318,7 @@ async def logout(
         revoked = False
         logger.warning("Supabase sign_out failed for sub=%s: %s", claims.get("sub"), exc)
     return {"message": "Logged out", "session_revoked": revoked}
+
 
 @router.get("/me", response_model=UserRead)
 async def me(
