@@ -1,6 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func as sa_func, case, extract
+from sqlalchemy import select, func as sa_func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta
 
@@ -44,8 +44,6 @@ def _ticket_to_read(ticket: Ticket, customer_email: str | None, sla_due_at=None)
 async def create_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     ai_result = classify_ticket(payload.subject, payload.body)
 
-    # NOTE: the model now predicts a department name directly (7-class model),
-    # not a category (the old 10-class RoutingRule lookup is no longer used).
     department_row = (await db.execute(
         select(Department).where(Department.name == ai_result["category"]["label"])
     )).scalar_one_or_none()

@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead
-from backend.app.schemas.department import DepartmentCreate, DepartmentUpdate
+from backend.app.schemas.ticket import TicketCreate,TicketRead
+from backend.app.schemas.department import DepartmentCreate
 from backend.app.schemas.sla_policy import SLAPolicyCreate
 from backend.app.models.enums import TicketStatus, TicketPriority
 

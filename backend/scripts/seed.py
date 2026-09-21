@@ -7,7 +7,6 @@ from backend.app.models.category import Category
 from backend.app.models.sla_policy import SLAPolicy
 from backend.app.models.user import User
 from backend.app.models.enums import TicketPriority, UserRole
-from backend.app.models.routing_rule import RoutingRule
 
 DEPARTMENTS = [
     "Technical Operations",
@@ -19,20 +18,19 @@ DEPARTMENTS = [
     "Service Reliability",
 ]
 
-# (category_name, department_name) — category_name must exactly match
-# the keys in label_mappings.json so classifier output resolves correctly
 CATEGORIES = [
-    ("Billing and Payments",            "Billing & Finance"),
-    ("Customer Service",                "Customer Experience"),
-    ("General Inquiry",                 "Customer Experience"),
-    ("Human Resources",                 "Administration & People"),
-    ("IT Support",                      "Technical Operations"),
-    ("Product Support",                 "Product Operations"),
-    ("Returns and Exchanges",           "Customer Experience"),
-    ("Sales and Pre-Sales",             "Sales & Growth"),
-    ("Service Outages and Maintenance", "Service Reliability"),
-    ("Technical Support",               "Technical Operations"),
+    "Billing and Payments",
+    "Customer Service",
+    "General Inquiry",
+    "Human Resources",
+    "IT Support",
+    "Product Support",
+    "Returns and Exchanges",
+    "Sales and Pre-Sales",
+    "Service Outages and Maintenance",
+    "Technical Support",
 ]
+
 
 SLA_POLICIES = [
     (TicketPriority.low, 480, 4320),
@@ -52,13 +50,14 @@ async def seed():
             if not exists.scalar_one_or_none():
                 db.add(Department(name=name))
         await db.commit()
-
+        
         # Categories
-        for name, _dept_name in CATEGORIES:
+        for name in CATEGORIES:
             exists = await db.execute(select(Category).where(Category.name == name))
             if not exists.scalar_one_or_none():
-                db.add(Category(name=name, description=""))
+                db.add(Category(name=name))
         await db.commit()
+
 
         # SLA Policies
         for priority, resp, resol in SLA_POLICIES:
@@ -66,22 +65,6 @@ async def seed():
             if not exists.scalar_one_or_none():
                 db.add(SLAPolicy(priority=priority, response_minutes=resp, resolution_minutes=resol))
         await db.commit()
-
-        # Routing rules: category -> department, from the explicit mapping above
-        for cat_name, dept_name in CATEGORIES:
-            cat = (await db.execute(select(Category).where(Category.name == cat_name))).scalar_one_or_none()
-            dept = (await db.execute(select(Department).where(Department.name == dept_name))).scalar_one_or_none()
-            if cat and dept:
-                exists = (await db.execute(
-                    select(RoutingRule).where(
-                        RoutingRule.category_id == cat.id,
-                        RoutingRule.department_id == dept.id,
-                    )
-                )).scalar_one_or_none()
-                if not exists:
-                    db.add(RoutingRule(category_id=cat.id, department_id=dept.id))
-        await db.commit()
-        print("Departments, categories, SLA policies, and routing rules seeded.")
 
         # Admin user (cross-department — no department_id)
         existing_admin = await db.execute(select(User).where(User.email == ADMIN_EMAIL))
