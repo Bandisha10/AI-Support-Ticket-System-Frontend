@@ -36,7 +36,7 @@ export default function Login() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const user = await login(form.email.trim(), form.password); 
+      const user = await login(form.email.trim(), form.password);
       if (user.must_change_password) {
         navigate("/change-password", { replace: true });
         return;
@@ -134,7 +134,6 @@ export default function Login() {
               </svg>
               Continue with Google
             </button>
-
             {/* 2. Divider */}
             <div className="relative my-4 text-center">
               <div className="absolute inset-0 flex items-center">
@@ -144,7 +143,6 @@ export default function Login() {
                 Or sign in with email
               </span>
             </div>
-
             {/* 3. Email & Password Fields */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-300">
@@ -163,7 +161,6 @@ export default function Login() {
                 />
               </div>
             </div>
-
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-300">
                 Password <span className="text-accent">*</span>
@@ -195,7 +192,6 @@ export default function Login() {
                 </button>
               </div>
             </div>
-
             <button
               type="submit"
               disabled={submitting}
@@ -203,7 +199,6 @@ export default function Login() {
             >
               {submitting ? "Signing in…" : "Sign In →"}
             </button>
-
             <p className="pt-1 text-center text-sm text-gray-500">
               <Link
                 to="/forgot-password"
@@ -212,7 +207,6 @@ export default function Login() {
                 Forgot password
               </Link>
             </p>
-
             <p className="text-center text-xs text-gray-600">
               Support agents do not sign up - an administrator invites you and
               emails your temporary password.{" "}
@@ -223,13 +217,13 @@ export default function Login() {
                 Create a customer account
               </Link>
             </p>
-
-            <div className="pt-2 text-center">
-              <Link
-                to="/faq"
-                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-accent transition-colors"
-              >
-                <span>Need help? Browse our Self-Service FAQ →</span>
+            <div className="pt-2 flex items-center justify-center gap-3 text-xs text-gray-500">
+              <Link to="/faq" className="hover:text-accent transition-colors">
+                Self-Service FAQ
+              </Link>
+              <span>•</span>
+              <Link to="/terms-and-conditions" className="hover:text-accent transition-colors">
+                Terms & Conditions
               </Link>
             </div>
           </form>

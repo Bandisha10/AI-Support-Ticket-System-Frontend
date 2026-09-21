@@ -245,7 +245,6 @@ export default function Signup() {
                   </div>
                 </div>
               </div>
-
               {/* Email Address */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-300">
@@ -265,7 +264,6 @@ export default function Signup() {
                   />
                 </div>
               </div>
-
               {/* Phone Number */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-300">
@@ -284,7 +282,6 @@ export default function Signup() {
                   />
                 </div>
               </div>
-
               {/* Password */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-300">
@@ -342,7 +339,6 @@ export default function Signup() {
                   </div>
                 )}
               </div>
-
               {/* Confirm Password */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-300">
@@ -388,8 +384,19 @@ export default function Signup() {
                   </div>
                 )}
               </div>
-
               <div className="pt-2">
+                <p className="mb-3 text-center text-[11px] text-gray-400">
+                  By creating an account, you agree to our{" "}
+                  <Link
+                    to="/terms-and-conditions"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-accent hover:underline"
+                  >
+                    Terms & Conditions
+                  </Link>{" "}
+                  and Acceptable Use Policy.
+                </p>
                 <button
                   type="submit"
                   disabled={submitting}
