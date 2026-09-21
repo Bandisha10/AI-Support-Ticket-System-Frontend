@@ -17,12 +17,13 @@ import * as ticketService from "../../services/ticketService";
 import { formatDateTime, formatRelativeTime } from "../../utils/formatters";
 import clsx from "clsx";
 import { STATUS_COLORS } from "../../utils/constants";
+import NotFound from "../NotFound";
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const { ticket, loading, refetch } = useTicketDetail(ticketId);
+  const { ticket, loading, error, refetch } = useTicketDetail(ticketId);
   const [replies, setReplies] = useState([]);
   const [repliesLoading, setRepliesLoading] = useState(true);
 
@@ -55,7 +56,19 @@ export default function TicketDetail() {
     }
   }
 
-  if (loading || !ticket) return <Loader fullScreen />;
+  if (loading) return <Loader fullScreen />;
+  if (error || !ticket) {
+    return (
+      <NotFound
+        type="ticket"
+        ticketId={ticketId}
+        customMessage={
+          error ||
+          "Ticket not found in queue or you may lack permission to view it."
+        }
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen w-full bg-surface-bg mx-auto max-w-4xl px-4 py-8">
