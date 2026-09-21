@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Send, Star, Paperclip, FileText, CheckCircle2 } from "lucide-react";
 import { useTicketDetail } from "../../hooks/useTickets";
@@ -10,6 +10,7 @@ import RatingModal from "../../components/customer/RatingModal";
 import clsx from "clsx";
 import { STATUS_COLORS } from "../../utils/constants";
 import { formatRelativeTime, formatDateTime } from "../../utils/formatters";
+import { useReplyRealtime } from "../../hooks/useReplyRealtime";
 
 export default function CustomerTicketDetail() {
   const { ticketId } = useParams();
@@ -49,6 +50,15 @@ export default function CustomerTicketDetail() {
       setRepliesLoading(false);
     }
   }
+
+  const handleNewReply = useCallback((newReply) => {
+    setReplies((prev) => {
+      if (prev.some((r) => r.id === newReply.id)) return prev;
+      return [...prev, newReply];
+    });
+  }, []);
+
+  useReplyRealtime(ticketId, handleNewReply);
 
   async function handleSendReply(e) {
     e.preventDefault();

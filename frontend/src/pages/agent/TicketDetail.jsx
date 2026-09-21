@@ -17,6 +17,7 @@ import * as ticketService from "../../services/ticketService";
 import { formatDateTime, formatRelativeTime } from "../../utils/formatters";
 import clsx from "clsx";
 import { STATUS_COLORS } from "../../utils/constants";
+import { useReplyRealtime } from "../../hooks/useReplyRealtime";
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
@@ -41,6 +42,15 @@ export default function TicketDetail() {
       setRepliesLoading(false);
     }
   }
+
+  const handleNewReply = useCallback((newReply) => {
+    setReplies((prev) => {
+      if (prev.some((r) => r.id === newReply.id)) return prev;
+      return [...prev, newReply];
+    });
+  }, []);
+
+  useReplyRealtime(ticketId, handleNewReply);
 
   async function handleStatusChange(e) {
     await ticketService.updateTicketStatus(ticketId, e.target.value);
