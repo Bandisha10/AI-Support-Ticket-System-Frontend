@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <style>
+    .brand-stroke { stroke: #1e2433; }
+    .brand-sparkle { fill: #1e2433; }
+    @media (prefers-color-scheme: dark) {
+      .brand-stroke { stroke: #ffffff; }
+      .brand-sparkle { fill: #ffffff; }
+    }
+  </style>
+
+  <!-- Headset arc -->
+  <path
+    class="brand-stroke"
+    d="M22 46V40C22 22.3 34.8 9 50 9C65.2 9 78 22.3 78 40V46"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Ear cups -->
+  <rect class="brand-stroke" x="14" y="42" width="16" height="24" rx="8" stroke-width="5.5" fill="none" />
+  <rect class="brand-stroke" x="70" y="42" width="16" height="24" rx="8" stroke-width="5.5" fill="none" />
+
+  <!-- Mic boom -->
+  <path
+    class="brand-stroke"
+    d="M78 66C78 76 70 80 62 80H55"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Speech bubble -->
+  <rect x="28" y="46" width="46" height="34" rx="12" fill="#f2b705" />
+  <path d="M40 78L34 90L50 80Z" fill="#f2b705" />
+
+  <!-- Sparkle inside bubble -->
+  <path
+    class="brand-sparkle"
+    d="M51 55L54 61L60 64L54 67L51 73L48 67L42 64L48 61Z"
+  />
+
+  <!-- Twinkle accent -->
+  <path d="M80 32L81.5 35.5L85 37L81.5 38.5L80 42L78.5 38.5L75 37L78.5 35.5Z" fill="#f2b705" />
+</svg>
