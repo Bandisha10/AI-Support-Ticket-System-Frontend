@@ -43,10 +43,17 @@ async def create_reply(payload: ReplyCreate, db: AsyncSession = Depends(get_db),
         data["is_auto_reply"] = False
     return await crud.create(db, data)
 
-
-@router.get("/ticket/{ticket_id}", response_model=list[ReplyRead], dependencies=[Depends(get_current_user)])
-async def list_replies_for_ticket(ticket_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Reply).where(Reply.ticket_id == ticket_id).order_by(Reply.created_at))
+@router.get("/ticket/{ticket_id}", response_model=list[ReplyRead])
+async def list_replies_for_ticket(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = select(Reply).where(Reply.ticket_id == ticket_id)
+    if current_user.role == UserRole.customer:
+        query = query.where(Reply.is_internal_note.is_(False))
+    query = query.order_by(Reply.created_at)
+    result = await db.execute(query)
     return result.scalars().all()
 
 @router.get("/{reply_id}", response_model=ReplyRead, dependencies=[Depends(get_current_user)])
