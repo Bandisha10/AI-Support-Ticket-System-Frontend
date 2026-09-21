@@ -1,7 +1,8 @@
-// frontend/src/pages/admin/Settings.jsx
 import { useState, useEffect, useMemo } from "react";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import * as adminService from "../../services/adminService";
 import AgentInvite from "../../components/admin/AgentInvite";
+import { formatDateTime } from "../../utils/formatters";
 
 export default function Settings() {
   const [users, setUsers] = useState([]);
@@ -10,6 +11,43 @@ export default function Settings() {
 
   const [newDepartment, setNewDepartment] = useState("");
   const [loading, setLoading] = useState(true);
+  // Sorting state for Team Members table
+  const [sortBy, setSortBy] = useState("name"); // "name" | "created_at"
+  const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
+  const handleHeaderSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortOrder(field === "created_at" ? "desc" : "asc");
+    }
+  };
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      if (sortBy === "name") {
+        const nameA =
+          [a.first_name, a.last_name].filter(Boolean).join(" ").trim() ||
+          a.name ||
+          a.email?.split("@")[0] ||
+          "";
+        const nameB =
+          [b.first_name, b.last_name].filter(Boolean).join(" ").trim() ||
+          b.name ||
+          b.email?.split("@")[0] ||
+          "";
+        const comp = nameA.localeCompare(nameB, undefined, {
+          sensitivity: "base",
+        });
+        return sortOrder === "asc" ? comp : -comp;
+      }
+      if (sortBy === "created_at") {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+      }
+      return 0;
+    });
+  }, [users, sortBy, sortOrder]);
 
   // Build a lookup map: department id → department object
   const departmentsById = useMemo(
@@ -173,48 +211,107 @@ export default function Settings() {
 
       {/* TEAM MEMBERS */}
       <div className="bg-[#11131a] border border-[#232632] rounded-[12px] p-5 mb-6">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
           <h2 className="font-semibold text-[14px]">
             Team Members ({users.length})
           </h2>
+          {/* Quick Sort Dropdown */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-[#9ca3af]">Sort by:</span>
+            <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [field, order] = e.target.value.split("-");
+                setSortBy(field);
+                setSortOrder(order);
+              }}
+              className="bg-[#0a0c10] border border-[#232632] text-gray-200 text-xs rounded-lg px-2.5 py-1.5 focus:border-[#fbbf24] outline-none cursor-pointer"
+            >
+              <option value="name-asc">Name (A → Z)</option>
+              <option value="name-desc">Name (Z → A)</option>
+              <option value="created_at-desc">Created (Newest first)</option>
+              <option value="created_at-asc">Created (Oldest first)</option>
+            </select>
+          </div>
         </div>
-
         {users.length === 0 ? (
           <div className="text-center py-12 text-[#9ca3af] text-[13px] border border-dashed border-[#232632] rounded-[8px]">
             No users found. Invite your first team member.
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-[2fr_2.2fr_1fr_1.3fr_1.5fr] text-[11px] text-[#9ca3af] px-3 py-2">
-              <span>NAME</span>
+            <div className="grid grid-cols-[2fr_2fr_1.3fr_1fr_1.1fr_1.4fr] text-[11px] text-[#9ca3af] px-3 py-2 select-none">
+              <button
+                type="button"
+                onClick={() => handleHeaderSort("name")}
+                className="flex items-center gap-1 hover:text-white transition-colors text-left"
+                title="Click to sort by Name"
+              >
+                <span>NAME</span>
+                {sortBy === "name" ? (
+                  sortOrder === "asc" ? (
+                    <ArrowUp className="h-3 w-3 text-[#fbbf24]" />
+                  ) : (
+                    <ArrowDown className="h-3 w-3 text-[#fbbf24]" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-3 w-3 opacity-40 hover:opacity-100" />
+                )}
+              </button>
               <span>EMAIL</span>
+              <button
+                type="button"
+                onClick={() => handleHeaderSort("created_at")}
+                className="flex items-center gap-1 hover:text-white transition-colors text-left"
+                title="Click to sort by Created Time"
+              >
+                <span>CREATED</span>
+                {sortBy === "created_at" ? (
+                  sortOrder === "asc" ? (
+                    <ArrowUp className="h-3 w-3 text-[#fbbf24]" />
+                  ) : (
+                    <ArrowDown className="h-3 w-3 text-[#fbbf24]" />
+                  )
+                ) : (
+                  <ArrowUpDown className="h-3 w-3 opacity-40 hover:opacity-100" />
+                )}
+              </button>
               <span>STATUS</span>
               <span>TIER</span>
               <span>ASSIGNMENT</span>
             </div>
-            {users.map((u) => {
+            {sortedUsers.map((u) => {
               const displayName =
                 [u.first_name, u.last_name].filter(Boolean).join(" ").trim() ||
                 u.name ||
-                u.email?.split("@")[0];
+                u.email?.split("@")[0] ||
+                "Team Member";
               return (
                 <div
                   key={u.id}
-                  className="grid grid-cols-[2fr_2.2fr_1fr_1.3fr_1.5fr] items-center px-3 py-2.5 border-t border-[#1a1d27] text-[13px]"
+                  className="grid grid-cols-[2fr_2fr_1.3fr_1fr_1.1fr_1.4fr] items-center px-3 py-2.5 border-t border-[#1a1d27] text-[13px]"
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#fbbf24] flex items-center justify-center text-[11px] font-bold text-black">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-full bg-[#fbbf24] flex items-center justify-center text-[11px] font-bold text-black shrink-0">
                       {displayName[0]?.toUpperCase() || "U"}
                     </div>
-                    <span>{displayName}</span>
+                    <span className="truncate">{displayName}</span>
                   </div>
-                  <span className="text-[#9ca3af] text-[12px]">{u.email}</span>
+                  <span className="text-[#9ca3af] text-[12px] truncate">
+                    {u.email}
+                  </span>
+                  <span className="text-[#9ca3af] text-[11px]">
+                    {u.created_at ? formatDateTime(u.created_at) : "N/A"}
+                  </span>
                   <span
-                    className={`w-fit px-2 py-0.5 rounded text-[10px] ${u.is_active === false ? "bg-[#2a1414] text-[#f87171]" : "bg-[#102a18] text-[#4ade80]"}`}
+                    className={`w-fit px-2 py-0.5 rounded text-[10px] ${
+                      u.is_active === false
+                        ? "bg-[#2a1414] text-[#f87171]"
+                        : "bg-[#102a18] text-[#4ade80]"
+                    }`}
                   >
                     {u.is_active === false ? "Inactive" : "Active"}
                   </span>
-
                   {/* Tier column */}
                   {u.role === "agent" ? (
                     <select
@@ -228,7 +325,6 @@ export default function Settings() {
                   ) : (
                     <span className="text-[12px] text-[#6b7280]">—</span>
                   )}
-
                   <select
                     value={assignmentValue(u)}
                     onChange={(e) => updateAssignment(u.id, e.target.value)}
