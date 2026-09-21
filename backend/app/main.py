@@ -61,6 +61,14 @@ app.include_router(tickets.router)
 app.include_router(sla_policies.router)
 app.include_router(replies.router)
 
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+

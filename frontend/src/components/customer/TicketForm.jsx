@@ -3,6 +3,7 @@ import { UploadCloud, X, FileText, Image as ImageIcon, Paperclip } from "lucide-
 import Button from "../common/Button";
 import { useToast } from "../common/Toast";
 import * as ticketService from "../../services/ticketService";
+import { validateAttachmentFile } from "../../utils/attachments";
 
 function formatFileSize(bytes) {
   if (bytes === 0) return "0 Bytes";
@@ -28,16 +29,26 @@ export default function TicketForm({ onCreated }) {
     const fileList = Array.from(files || []);
     if (!fileList.length) return;
 
-    const newAttachments = fileList.map((file) => ({
-      id: Math.random().toString(36).substring(2, 9),
-      file,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-    }));
+    const validNewAttachments = [];
+    for (const file of fileList) {
+      const validation = validateAttachmentFile(file);
+      if (!validation.valid) {
+        showToast(validation.error, "error");
+        continue;
+      }
+      validNewAttachments.push({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      });
+    }
 
-    setAttachments((prev) => [...prev, ...newAttachments]);
+    if (validNewAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...validNewAttachments]);
+    }
   }
 
   function removeAttachment(id) {
@@ -70,19 +81,18 @@ export default function TicketForm({ onCreated }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.subject.trim() || !form.description.trim()) {
+      showToast("Please fill in both subject and description", "error");
+      return;
+    }
     setSubmitting(true);
     try {
-      if (attachments.length > 0) {
-        // Backend file upload endpoint contract note:
-        // When multipart/form-data upload is added on backend, pass attachments via FormData
-        console.info(
-          "[TicketForm] Attached files (pending backend upload endpoint integration):",
-          attachments.map((a) => ({ name: a.name, size: a.size, type: a.type }))
-        );
-      }
-
-      const ticket = await ticketService.createTicket(form);
-      showToast("Ticket submitted successfully", "success");
+      const ticket = await ticketService.createTicket(form, attachments);
+      const msg =
+        attachments.length > 0
+          ? `Ticket submitted successfully with ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`
+          : "Ticket submitted successfully";
+      showToast(msg, "success");
       setForm({ subject: "", description: "", category_id: "" });
       setAttachments([]);
       onCreated?.(ticket);

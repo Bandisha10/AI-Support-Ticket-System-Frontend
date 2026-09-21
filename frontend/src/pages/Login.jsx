@@ -43,12 +43,13 @@ export default function Login() {
       }
       navigate(homeRoute || "/tickets");
     } catch (err) {
-      showToast(
+      const errMsg =
         err.response?.data?.detail?.[0]?.msg ||
-          err.response?.data?.detail ||
-          "Invalid email or password",
-        "error",
-      );
+        err.response?.data?.detail ||
+        (err.code === "ERR_NETWORK" || err.message?.includes("Network")
+          ? "Cannot connect to server. Make sure the backend is running on port 8000."
+          : "Invalid email or password");
+      showToast(errMsg, "error");
     } finally {
       setSubmitting(false);
     }

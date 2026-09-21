@@ -1,16 +1,24 @@
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func as sa_func, case
-from sqlalchemy.ext.asyncio import AsyncSession
+import os
+import re
+import shutil
+import uuid as uuid_pkg
 from datetime import datetime, timedelta
+from pathlib import Path
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse
+from sqlalchemy import select, func as sa_func, case, extract
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_db
 from backend.app.models.ticket import Ticket
 from backend.app.models.user import User
 from backend.app.models.sla_state import SLAState
 from backend.app.models.department import Department
+from backend.app.models.attachment import Attachment
 from backend.app.models.enums import UserRole, TicketStatus, TicketPriority
-from backend.app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead
+from backend.app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead, AttachmentRead
 from backend.app.crud.base import CRUDBase
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.ai.classify_ticket import classify_ticket
@@ -20,8 +28,89 @@ from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRe
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 crud = CRUDBase(Ticket)
 
-def _ticket_to_read(ticket: Ticket, customer_email: str | None, sla_due_at=None) -> dict:
-    """Build a TicketRead-compatible dict from a Ticket ORM object + joined fields."""
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".doc", ".docx", ".txt"}
+
+
+def _format_size(size_bytes: int | None) -> str:
+    if not size_bytes:
+        return "0 Bytes"
+    k = 1024.0
+    sizes = ["Bytes", "KB", "MB", "GB"]
+    i = 0
+    val = float(size_bytes)
+    while val >= k and i < len(sizes) - 1:
+        val /= k
+        i += 1
+    return f"{val:.1f} {sizes[i]}"
+
+
+def _sanitize_filename(filename: str) -> str:
+    base = os.path.basename(filename)
+    return re.sub(r"[^a-zA-Z0-9_.-]", "_", base)
+
+
+async def _get_ticket_attachments(ticket_id: UUID, db: AsyncSession) -> list[AttachmentRead]:
+    attachments: list[AttachmentRead] = []
+    # 1. Try from database
+    try:
+        result = await db.execute(select(Attachment).where(Attachment.ticket_id == ticket_id))
+        rows = result.scalars().all()
+        for r in rows:
+            formatted_sz = _format_size(r.file_size)
+            attachments.append(
+                AttachmentRead(
+                    id=r.id,
+                    ticket_id=r.ticket_id,
+                    filename=r.filename,
+                    name=r.original_filename,
+                    url=f"/uploads/{ticket_id}/{r.filename}",
+                    content_type=r.content_type,
+                    size=formatted_sz,
+                    file_size=r.file_size,
+                    size_formatted=formatted_sz,
+                    created_at=r.created_at,
+                )
+            )
+    except Exception:
+        pass
+
+    # 2. Also check file system directory directly if attachments list is empty
+    if not attachments:
+        ticket_folder = UPLOAD_DIR / str(ticket_id)
+        if ticket_folder.exists():
+            for f in ticket_folder.iterdir():
+                if f.is_file():
+                    stat = f.stat()
+                    orig_name = f.name.split("_", 1)[1] if "_" in f.name else f.name
+                    formatted_sz = _format_size(stat.st_size)
+                    attachments.append(
+                        AttachmentRead(
+                            id=str(f.name),
+                            ticket_id=ticket_id,
+                            filename=f.name,
+                            name=orig_name,
+                            url=f"/uploads/{ticket_id}/{f.name}",
+                            content_type=None,
+                            size=formatted_sz,
+                            file_size=stat.st_size,
+                            size_formatted=formatted_sz,
+                            created_at=datetime.fromtimestamp(stat.st_ctime),
+                        )
+                    )
+    return attachments
+
+
+def _ticket_to_read(
+    ticket: Ticket,
+    customer_email: str | None,
+    sla_due_at=None,
+    attachments: list[AttachmentRead] | None = None,
+) -> TicketRead:
+    """Build a TicketRead-compatible object from a Ticket ORM object + joined fields."""
     return TicketRead(
         id=ticket.id,
         customer_id=ticket.customer_id,
@@ -36,6 +125,7 @@ def _ticket_to_read(ticket: Ticket, customer_email: str | None, sla_due_at=None)
         body_redacted=ticket.body_redacted,
         classification_confidence=ticket.classification_confidence,
         sla_due_at=sla_due_at,
+        attachments=attachments or [],
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
@@ -458,6 +548,147 @@ async def rate_ticket(
     return rating
 
 
+@router.post("/{ticket_id}/attachments", response_model=list[AttachmentRead], status_code=201)
+async def upload_attachments(
+    ticket_id: UUID,
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ticket = await crud.get(db, ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(403, "Not allowed")
+
+    ticket_dir = UPLOAD_DIR / str(ticket_id)
+    ticket_dir.mkdir(parents=True, exist_ok=True)
+
+    saved_attachments: list[AttachmentRead] = []
+
+    for file in files:
+        if not file.filename:
+            continue
+
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            allowed_list_str = ", ".join(sorted(ALLOWED_EXTENSIONS))
+            raise HTTPException(
+                400,
+                f"File '{file.filename}' has unsupported extension '{ext}'. Allowed extensions are: {allowed_list_str}",
+            )
+
+        safe_orig_name = _sanitize_filename(file.filename)
+        unique_prefix = uuid_pkg.uuid4().hex[:8]
+        disk_filename = f"{unique_prefix}_{safe_orig_name}"
+        destination = ticket_dir / disk_filename
+
+        file_size = 0
+        try:
+            with open(destination, "wb") as buffer:
+                while chunk := file.file.read(1024 * 1024):
+                    file_size += len(chunk)
+                    if file_size > MAX_FILE_SIZE_BYTES:
+                        buffer.close()
+                        if destination.exists():
+                            destination.unlink()
+                        raise HTTPException(
+                            400,
+                            f"File '{file.filename}' exceeds maximum allowed size of 5 MB.",
+                        )
+                    buffer.write(chunk)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            if destination.exists():
+                destination.unlink()
+            raise HTTPException(500, f"Failed to save file '{file.filename}': {exc}")
+
+        attachment_id = uuid_pkg.uuid4()
+        formatted_sz = _format_size(file_size)
+
+        try:
+            db_att = Attachment(
+                id=attachment_id,
+                ticket_id=ticket_id,
+                filename=disk_filename,
+                original_filename=file.filename,
+                content_type=file.content_type,
+                file_size=file_size,
+            )
+            db.add(db_att)
+            await db.commit()
+            await db.refresh(db_att)
+            saved_attachments.append(
+                AttachmentRead(
+                    id=db_att.id,
+                    ticket_id=ticket_id,
+                    filename=disk_filename,
+                    name=file.filename,
+                    url=f"/uploads/{ticket_id}/{disk_filename}",
+                    content_type=file.content_type,
+                    size=formatted_sz,
+                    file_size=file_size,
+                    size_formatted=formatted_sz,
+                    created_at=db_att.created_at,
+                )
+            )
+        except Exception:
+            await db.rollback()
+            saved_attachments.append(
+                AttachmentRead(
+                    id=str(attachment_id),
+                    ticket_id=ticket_id,
+                    filename=disk_filename,
+                    name=file.filename,
+                    url=f"/uploads/{ticket_id}/{disk_filename}",
+                    content_type=file.content_type,
+                    size=formatted_sz,
+                    file_size=file_size,
+                    size_formatted=formatted_sz,
+                    created_at=datetime.utcnow(),
+                )
+            )
+
+    return saved_attachments
+
+
+@router.get("/{ticket_id}/attachments", response_model=list[AttachmentRead])
+async def list_ticket_attachments(
+    ticket_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ticket = await crud.get(db, ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(403, "Not allowed")
+
+    return await _get_ticket_attachments(ticket_id, db)
+
+
+@router.get("/{ticket_id}/attachments/{filename}")
+async def download_ticket_attachment(
+    ticket_id: UUID,
+    filename: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ticket = await crud.get(db, ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(403, "Not allowed")
+
+    safe_name = os.path.basename(filename)
+    file_path = UPLOAD_DIR / str(ticket_id) / safe_name
+    if not file_path.is_file():
+        raise HTTPException(404, "File not found")
+
+    return FileResponse(path=str(file_path), filename=safe_name)
+
+
 @router.get("/{ticket_id}", response_model=TicketRead)
 async def get_ticket(
     ticket_id: UUID,
@@ -479,7 +710,8 @@ async def get_ticket(
     if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
         raise HTTPException(403, "Not allowed")
 
-    return _ticket_to_read(ticket, customer_email, sla_due_at)
+    attachments = await _get_ticket_attachments(ticket.id, db)
+    return _ticket_to_read(ticket, customer_email, sla_due_at, attachments)
 
 
 @router.put("/{ticket_id}", response_model=TicketRead, dependencies=[Depends(require_role(UserRole.admin, UserRole.agent))])
@@ -502,7 +734,8 @@ async def update_ticket(ticket_id: UUID, payload: TicketUpdate, db: AsyncSession
     customer_email = row[0] if row else None
     sla_due_at = row[1] if row else None
 
-    return _ticket_to_read(updated, customer_email, sla_due_at)
+    attachments = await _get_ticket_attachments(updated.id, db)
+    return _ticket_to_read(updated, customer_email, sla_due_at, attachments)
 
 
 @router.delete("/{ticket_id}", status_code=204, dependencies=[Depends(require_role(UserRole.admin))])

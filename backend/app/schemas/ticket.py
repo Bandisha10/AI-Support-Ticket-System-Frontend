@@ -18,6 +18,20 @@ class TicketUpdate(BaseModel):
     status: TicketStatus | None = None
     classification_confidence: Decimal | None = None
 
+class AttachmentRead(BaseModel):
+    id: UUID | str | None = None
+    ticket_id: UUID
+    filename: str
+    name: str | None = None
+    url: str
+    content_type: str | None = None
+    size: str | None = None
+    file_size: int | None = None
+    size_formatted: str | None = None
+    created_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TicketRead(BaseModel):
     id: UUID
     customer_id: UUID
@@ -32,6 +46,7 @@ class TicketRead(BaseModel):
     body_redacted: str
     classification_confidence: Decimal | None
     sla_due_at: datetime | None = None
+    attachments: list[AttachmentRead] = []
     created_at: datetime
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
