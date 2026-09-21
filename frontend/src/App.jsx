@@ -12,6 +12,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ChangePassword from "./pages/ChangePassword";
 import ResetPassword from "./pages/ResetPassword";
 import FAQ from "./pages/FAQ";
+import Terms from "./pages/Terms";
 import NewTicket from "./pages/customer/NewTicket";
 import CustomerTicketDetail from "./pages/customer/TicketDetail";
 import MyTickets from "./pages/customer/MyTickets";
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/terms-and-conditions" element={<Terms />} />
             <Route path="/faq" element={<FAQ />} />
 
             {/* Signed in, but still on temporary password */}
@@ -157,13 +159,12 @@ export default function App() {
             </Route>
 
             {/* Fallback */}
-                        {/* Fallback and 404 Routes */}
+            {/* Fallback and 404 Routes */}
             <Route path="/404" element={<NotFound />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomeRedirect />} />
             </Route>
             <Route path="*" element={<NotFound />} />
-
           </Routes>
         </NotificationProvider>
       </ToastProvider>
