@@ -11,7 +11,12 @@ engine = create_async_engine(
     pool_recycle=300,         # Recycles connections every 5 minutes before idle timeouts
     pool_size=10,
     max_overflow=20,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
+
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
 class Base(DeclarativeBase):

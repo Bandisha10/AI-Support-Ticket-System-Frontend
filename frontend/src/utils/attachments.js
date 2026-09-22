@@ -1,12 +1,9 @@
-// frontend/src/utils/attachments.js
-
 export const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export const ALLOWED_EXTENSIONS = [
   ".png",
   ".jpg",
   ".jpeg",
-  ".gif",
   ".webp",
   ".pdf",
   ".doc",
@@ -14,10 +11,9 @@ export const ALLOWED_EXTENSIONS = [
   ".txt",
 ];
 
-/**
- * Builds a full URL for opening/downloading attachments.
- * Prefers import.meta.env.VITE_API_URL, fallback to http://localhost:8000.
- */
+
+//  Builds a full URL for opening/downloading attachments.
+//  Prefers import.meta.env.VITE_API_URL, fallback to http://localhost:8000.
 export function getAttachmentUrl(relativeOrFullUrl) {
   if (!relativeOrFullUrl) return "#";
   if (
@@ -37,17 +33,13 @@ export function getAttachmentUrl(relativeOrFullUrl) {
   return `${cleanBase}${cleanPath}`;
 }
 
-/**
- * Determines whether a file is an image based on content_type or extension.
- */
+//  Determines whether a file is an image based on content_type or extension.
 export function isImageAttachment(filename = "", contentType = "") {
   if (contentType && contentType.startsWith("image/")) return true;
   return /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(filename || "");
 }
 
-/**
- * Validates a single file against max size (5 MB) and allowed extensions.
- */
+// Validates a single file against max size (5 MB) and allowed extensions.
 export function validateAttachmentFile(file) {
   if (!file) return { valid: false, error: "No file selected" };
   if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
