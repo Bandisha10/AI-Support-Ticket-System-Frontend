@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Deskwise"
     FRONTEND_URL: str = "http://localhost:5173"
     FORCE_HTTPS: bool = False
+    SUPABASE_STORAGE_BUCKET: str = "ticket-attachments"
 
 
     # backend/app/config.py

@@ -1,16 +1,18 @@
+import logging
 import os
 import re
-import shutil
 import uuid as uuid_pkg
 from datetime import datetime, timedelta
-from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse, Response
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, func as sa_func, case, extract
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import settings
+from backend.app.core.supabase_client import supabase_admin
 from backend.app.database import get_db
 from backend.app.models.ticket import Ticket
 from backend.app.models.user import User
@@ -25,14 +27,14 @@ from backend.app.ai.classify_ticket import classify_ticket
 from backend.app.models.ticket_rating import TicketRating
 from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 crud = CRUDBase(Ticket)
 
-UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
+STORAGE_BUCKET = getattr(settings, "SUPABASE_STORAGE_BUCKET", "ticket-attachments")
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".doc", ".docx", ".txt"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".doc", ".docx", ".txt"}
 
 
 def _format_size(size_bytes: int | None) -> str:
@@ -53,21 +55,36 @@ def _sanitize_filename(filename: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]", "_", base)
 
 
+async def _get_signed_url_safe(ticket_id: UUID, filename: str, expires_in: int = 3600) -> str:
+    """Generate a temporary signed URL from Supabase Storage for secure direct access."""
+    storage_path = f"{ticket_id}/{filename}"
+    try:
+        data = await run_in_threadpool(
+            supabase_admin.storage.from_(STORAGE_BUCKET).create_signed_url,
+            storage_path,
+            expires_in,
+        )
+        return data.get("signedURL") or data.get("signedUrl") or f"/tickets/{ticket_id}/attachments/{filename}"
+    except Exception as exc:
+        logger.warning("Could not generate signed URL for %s: %s", storage_path, exc)
+        return f"/tickets/{ticket_id}/attachments/{filename}"
+
+
 async def _get_ticket_attachments(ticket_id: UUID, db: AsyncSession) -> list[AttachmentRead]:
     attachments: list[AttachmentRead] = []
-    # 1. Try from database
     try:
         result = await db.execute(select(Attachment).where(Attachment.ticket_id == ticket_id))
         rows = result.scalars().all()
         for r in rows:
             formatted_sz = _format_size(r.file_size)
+            signed_url = await _get_signed_url_safe(ticket_id, r.filename)
             attachments.append(
                 AttachmentRead(
                     id=r.id,
                     ticket_id=r.ticket_id,
                     filename=r.filename,
                     name=r.original_filename,
-                    url=f"/uploads/{ticket_id}/{r.filename}",
+                    url=signed_url,
                     content_type=r.content_type,
                     size=formatted_sz,
                     file_size=r.file_size,
@@ -75,34 +92,10 @@ async def _get_ticket_attachments(ticket_id: UUID, db: AsyncSession) -> list[Att
                     created_at=r.created_at,
                 )
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error("Failed to query attachments for ticket %s: %s", ticket_id, exc)
 
-    # 2. Also check file system directory directly if attachments list is empty
-    if not attachments:
-        ticket_folder = UPLOAD_DIR / str(ticket_id)
-        if ticket_folder.exists():
-            for f in ticket_folder.iterdir():
-                if f.is_file():
-                    stat = f.stat()
-                    orig_name = f.name.split("_", 1)[1] if "_" in f.name else f.name
-                    formatted_sz = _format_size(stat.st_size)
-                    attachments.append(
-                        AttachmentRead(
-                            id=str(f.name),
-                            ticket_id=ticket_id,
-                            filename=f.name,
-                            name=orig_name,
-                            url=f"/uploads/{ticket_id}/{f.name}",
-                            content_type=None,
-                            size=formatted_sz,
-                            file_size=stat.st_size,
-                            size_formatted=formatted_sz,
-                            created_at=datetime.fromtimestamp(stat.st_ctime),
-                        )
-                    )
     return attachments
-
 
 def _ticket_to_read(
     ticket: Ticket,
@@ -547,7 +540,6 @@ async def rate_ticket(
     await db.refresh(rating)
     return rating
 
-
 @router.post("/{ticket_id}/attachments", response_model=list[AttachmentRead], status_code=201)
 async def upload_attachments(
     ticket_id: UUID,
@@ -560,9 +552,6 @@ async def upload_attachments(
         raise HTTPException(404, "Ticket not found")
     if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
         raise HTTPException(403, "Not allowed")
-
-    ticket_dir = UPLOAD_DIR / str(ticket_id)
-    ticket_dir.mkdir(parents=True, exist_ok=True)
 
     saved_attachments: list[AttachmentRead] = []
 
@@ -581,29 +570,31 @@ async def upload_attachments(
         safe_orig_name = _sanitize_filename(file.filename)
         unique_prefix = uuid_pkg.uuid4().hex[:8]
         disk_filename = f"{unique_prefix}_{safe_orig_name}"
-        destination = ticket_dir / disk_filename
+        storage_path = f"{ticket_id}/{disk_filename}"
 
-        file_size = 0
+        # 1. Read file bytes and validate max size
+        content = await file.read()
+        file_size = len(content)
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                400,
+                f"File '{file.filename}' exceeds maximum allowed size of 5 MB.",
+            )
+
+        # 2. Upload to Supabase Storage
+        content_type = file.content_type or "application/octet-stream"
         try:
-            with open(destination, "wb") as buffer:
-                while chunk := file.file.read(1024 * 1024):
-                    file_size += len(chunk)
-                    if file_size > MAX_FILE_SIZE_BYTES:
-                        buffer.close()
-                        if destination.exists():
-                            destination.unlink()
-                        raise HTTPException(
-                            400,
-                            f"File '{file.filename}' exceeds maximum allowed size of 5 MB.",
-                        )
-                    buffer.write(chunk)
-        except HTTPException:
-            raise
+            await run_in_threadpool(
+                supabase_admin.storage.from_(STORAGE_BUCKET).upload,
+                storage_path,
+                content,
+                {"content-type": content_type},
+            )
         except Exception as exc:
-            if destination.exists():
-                destination.unlink()
-            raise HTTPException(500, f"Failed to save file '{file.filename}': {exc}")
+            logger.exception("Failed to upload %s to Supabase Storage: %s", storage_path, exc)
+            raise HTTPException(500, f"Failed to upload file '{file.filename}' to storage: {exc}")
 
+        # 3. Create attachment record in DB
         attachment_id = uuid_pkg.uuid4()
         formatted_sz = _format_size(file_size)
 
@@ -619,13 +610,15 @@ async def upload_attachments(
             db.add(db_att)
             await db.commit()
             await db.refresh(db_att)
+
+            signed_url = await _get_signed_url_safe(ticket_id, disk_filename)
             saved_attachments.append(
                 AttachmentRead(
                     id=db_att.id,
                     ticket_id=ticket_id,
                     filename=disk_filename,
                     name=file.filename,
-                    url=f"/uploads/{ticket_id}/{disk_filename}",
+                    url=signed_url,
                     content_type=file.content_type,
                     size=formatted_sz,
                     file_size=file_size,
@@ -633,25 +626,20 @@ async def upload_attachments(
                     created_at=db_att.created_at,
                 )
             )
-        except Exception:
+        except Exception as exc:
             await db.rollback()
-            saved_attachments.append(
-                AttachmentRead(
-                    id=str(attachment_id),
-                    ticket_id=ticket_id,
-                    filename=disk_filename,
-                    name=file.filename,
-                    url=f"/uploads/{ticket_id}/{disk_filename}",
-                    content_type=file.content_type,
-                    size=formatted_sz,
-                    file_size=file_size,
-                    size_formatted=formatted_sz,
-                    created_at=datetime.utcnow(),
+            # Clean up uploaded storage object if DB insert fails
+            try:
+                await run_in_threadpool(
+                    supabase_admin.storage.from_(STORAGE_BUCKET).remove,
+                    [storage_path],
                 )
-            )
+            except Exception:
+                pass
+            logger.exception("Database error while saving attachment for ticket %s: %s", ticket_id, exc)
+            raise HTTPException(500, f"Failed to record attachment '{file.filename}' in database")
 
     return saved_attachments
-
 
 @router.get("/{ticket_id}/attachments", response_model=list[AttachmentRead])
 async def list_ticket_attachments(
@@ -667,7 +655,6 @@ async def list_ticket_attachments(
 
     return await _get_ticket_attachments(ticket_id, db)
 
-
 @router.get("/{ticket_id}/attachments/{filename}")
 async def download_ticket_attachment(
     ticket_id: UUID,
@@ -682,12 +669,26 @@ async def download_ticket_attachment(
         raise HTTPException(403, "Not allowed")
 
     safe_name = os.path.basename(filename)
-    file_path = UPLOAD_DIR / str(ticket_id) / safe_name
-    if not file_path.is_file():
-        raise HTTPException(404, "File not found")
+    signed_url = await _get_signed_url_safe(ticket_id, safe_name, expires_in=300)
 
-    return FileResponse(path=str(file_path), filename=safe_name)
+    # Redirect client directly to the fast, temporary CDN signed link
+    if signed_url.startswith("http://") or signed_url.startswith("https://"):
+        return RedirectResponse(url=signed_url, status_code=307)
 
+    # Fallback: stream file bytes directly from Supabase Storage
+    try:
+        storage_path = f"{ticket_id}/{safe_name}"
+        file_bytes = await run_in_threadpool(
+            supabase_admin.storage.from_(STORAGE_BUCKET).download,
+            storage_path,
+        )
+        return Response(
+            content=file_bytes,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        )
+    except Exception:
+        raise HTTPException(404, "Attachment file not found in storage")
 
 @router.get("/{ticket_id}", response_model=TicketRead)
 async def get_ticket(
