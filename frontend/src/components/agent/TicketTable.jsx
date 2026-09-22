@@ -1,7 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import { Search, Filter, CheckSquare, UserCheck, XCircle, Loader2 } from "lucide-react";
+import {
+  Search,
+  Filter,
+  CheckSquare,
+  UserCheck,
+  XCircle,
+  Loader2,
+} from "lucide-react";
 import { STATUS_COLORS } from "../../utils/constants";
 import { formatRelativeTime } from "../../utils/formatters";
 import SLAWatcher from "./SLAWatcher";
@@ -39,7 +46,7 @@ export default function TicketTable({
 
   const departmentNameById = useMemo(
     () => Object.fromEntries(departments.map((d) => [d.id, d.name])),
-    [departments]
+    [departments],
   );
 
   // Client-side filtering (Feature 1)
@@ -49,7 +56,9 @@ export default function TicketTable({
       const matchSearch =
         !debouncedSearch.trim() ||
         t.subject?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        t.customer_email?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        t.customer_email
+          ?.toLowerCase()
+          .includes(debouncedSearch.toLowerCase()) ||
         t.body_redacted?.toLowerCase().includes(debouncedSearch.toLowerCase());
 
       const matchStatus =
@@ -108,7 +117,8 @@ export default function TicketTable({
   // Bulk action: Close selected
   async function handleBulkClose() {
     if (selectedTicketIds.size === 0) return;
-    if (!window.confirm(`Close ${selectedTicketIds.size} selected ticket(s)?`)) return;
+    if (!window.confirm(`Close ${selectedTicketIds.size} selected ticket(s)?`))
+      return;
     setBulkActionLoading(true);
     try {
       const ids = Array.from(selectedTicketIds);
@@ -125,7 +135,10 @@ export default function TicketTable({
     }
   }
 
-  if (loading) return <p className="text-sm text-gray-500 py-6 text-center">Loading queue…</p>;
+  if (loading)
+    return (
+      <p className="text-sm text-gray-500 py-6 text-center">Loading queue…</p>
+    );
 
   return (
     <div className="space-y-4">
@@ -138,7 +151,7 @@ export default function TicketTable({
             placeholder="Search tickets by subject, keyword, customer…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full rounded-lg border border-surface-border bg-surface-bg py-2 pl-9 pr-3 text-xs text-gray-200 placeholder:text-gray-500 focus:border-accent focus:outline-none"
+            className="w-full rounded-lg border border-surface-border bg-surface-bg py-2 pl-9 pr-3 text-xs text-gray-200 placeholder:text-gray-400 focus:border-accent focus:outline-none"
           />
         </div>
 
@@ -179,7 +192,8 @@ export default function TicketTable({
           <div className="flex items-center gap-2">
             <CheckSquare className="h-4 w-4 text-accent" />
             <span className="text-xs font-semibold text-white">
-              {selectedTicketIds.size} ticket{selectedTicketIds.size > 1 ? "s" : ""} selected
+              {selectedTicketIds.size} ticket
+              {selectedTicketIds.size > 1 ? "s" : ""} selected
             </span>
           </div>
 
@@ -224,7 +238,7 @@ export default function TicketTable({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="border-b border-surface-border text-xs uppercase text-gray-500">
+            <thead className="border-b border-surface-border text-xs uppercase text-gray-400 font-semibold">
               <tr>
                 <th className="py-2.5 px-3">Subject</th>
                 <th className="py-2.5 px-3">Customer</th>
@@ -251,9 +265,14 @@ export default function TicketTable({
                       </Link>
                       {t.classification_confidence !== null && (
                         <div className="text-[11px] text-gray-400 mt-0.5">
-                          Department: {departmentNameById[t.department_id] || "General"}
+                          Department:{" "}
+                          {departmentNameById[t.department_id] || "General"}
                           {t.classification_confidence !== undefined && (
-                            <span> ({(t.classification_confidence * 100).toFixed(0)}% AI confidence)</span>
+                            <span>
+                              {" "}
+                              ({(t.classification_confidence * 100).toFixed(0)}%
+                              AI confidence)
+                            </span>
                           )}
                         </div>
                       )}
@@ -268,7 +287,7 @@ export default function TicketTable({
                       <span
                         className={clsx(
                           "rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
-                          STATUS_COLORS[t.status]
+                          STATUS_COLORS[t.status],
                         )}
                       >
                         {t.status?.replace("_", " ")}
@@ -281,9 +300,7 @@ export default function TicketTable({
                       {formatRelativeTime(t.created_at)}
                     </td>
                     {renderActions && (
-                      <td className="py-3 px-3">
-                        {renderActions(t)}
-                      </td>
+                      <td className="py-3 px-3">{renderActions(t)}</td>
                     )}
                   </tr>
                 );

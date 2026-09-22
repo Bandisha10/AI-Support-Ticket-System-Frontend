@@ -1,6 +1,8 @@
+# backend/app/models/ticket.py
 import uuid
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, DateTime, Numeric, Enum as SAEnum
+# Line 3: Add Index to sqlalchemy imports
+from sqlalchemy import String, ForeignKey, DateTime, Numeric, Enum as SAEnum, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -22,3 +24,16 @@ class Ticket(Base):
     classification_confidence: Mapped[float | None] = mapped_column(Numeric(4, 3))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        # Accelerates customer ticket list sorted by created_at DESC
+        Index("idx_tickets_customer_created", "customer_id", "created_at"),
+        # Accelerates agent queue filtering (assigned tickets by status)
+        Index("idx_tickets_assigned_agent_status", "assigned_agent_id", "status"),
+        # Accelerates department triage and unassigned ticket queue
+        Index("idx_tickets_department_status", "department_id", "status"),
+        # Accelerates status breakdown in analytics & admin panel filters
+        Index("idx_tickets_status", "status"),
+        # Accelerates priority breakdown in analytics
+        Index("idx_tickets_priority", "priority"),
+    )
