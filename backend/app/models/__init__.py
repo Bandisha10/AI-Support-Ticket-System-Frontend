@@ -6,3 +6,4 @@ from backend.app.models.ticket import Ticket
 from backend.app.models.sla_state import SLAState
 from backend.app.models.reply import Reply
 from backend.app.models.ticket_rating import TicketRating
+from backend.app.models.attachment import Attachment

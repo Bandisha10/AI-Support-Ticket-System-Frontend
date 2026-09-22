@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Search, ChevronDown, HelpCircle, ArrowLeft, MessageSquare, LifeBuoy, Sparkles } from "lucide-react";
+import {
+  Search,
+  ChevronDown,
+  HelpCircle,
+  ArrowLeft,
+  MessageSquare,
+  LifeBuoy,
+  Sparkles,
+} from "lucide-react";
 import Logo from "../components/common/Logo";
 import { useAuth } from "../hooks/useAuth";
 
@@ -132,7 +140,8 @@ export default function FAQ() {
             How can we help you today?
           </h1>
           <p className="mt-3 text-sm text-gray-400">
-            Find instant answers to common questions about accounts, response times, AI classification, and ticket management.
+            Find instant answers to common questions about accounts, response
+            times, AI classification, and ticket management.
           </p>
 
           {/* Search Box */}
@@ -171,7 +180,9 @@ export default function FAQ() {
         {filteredFaqs.length === 0 ? (
           <div className="rounded-2xl border border-surface-border bg-surface-card p-12 text-center">
             <HelpCircle className="mx-auto h-8 w-8 text-gray-600 mb-2" />
-            <p className="text-base font-semibold text-gray-300">No matching questions found</p>
+            <p className="text-base font-semibold text-gray-300">
+              No matching questions found
+            </p>
             <p className="mt-1 text-sm text-gray-500">
               Try searching with different keywords or submit a ticket directly.
             </p>
@@ -223,16 +234,37 @@ export default function FAQ() {
               <span>Still couldn't find what you need?</span>
             </h3>
             <p className="mt-1 text-sm text-gray-400">
-              Our AI support system and dedicated support staff are available to assist you.
+              Our AI support system and dedicated support staff are available to
+              assist you.
             </p>
           </div>
-          <Link to="/tickets/new" className="mt-4 sm:mt-0 shrink-0 inline-block">
+          <Link
+            to="/tickets/new"
+            className="mt-4 sm:mt-0 shrink-0 inline-block"
+          >
             <button className="rounded-xl bg-accent px-5 py-2.5 text-xs font-bold text-black hover:bg-accent-hover transition-colors shadow-lg">
               Submit a Ticket →
             </button>
           </Link>
         </div>
       </main>
+      {/* Footer */}
+      <footer className="mt-16 border-t border-surface-border bg-surface-card/40 py-6 text-center text-xs text-gray-500">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 sm:flex-row">
+          <p>
+            © {new Date().getFullYear()} Deskwise Support System. All rights
+            reserved.
+          </p>
+          <div className="flex items-center gap-4">
+            <Link to="/terms-and-conditions" className="text-accent hover:underline">
+              Terms & Conditions
+            </Link>
+            <Link to="/faq" className="hover:text-accent transition-colors">
+              Knowledge Base
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

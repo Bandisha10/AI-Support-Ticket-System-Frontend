@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 dist/
 .env
 .env.local
@@ -17,3 +17,9 @@ myREADME.md
 requirements copy.txt
 .vite
 AGENT.md
+AGENTS.md
+uploads/
+backend/uploads/
+backend/app/ai/model_artifacts/
+*.safetensors
+

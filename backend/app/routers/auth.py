@@ -53,18 +53,6 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     )
 
 
-def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=settings.FRONTEND_URL.startswith("https"),
-        samesite="lax",
-        path="/auth/refresh",
-        max_age=30 * 24 * 3600,  # 30 days
-    )
-
-
 def _delete_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         key="refresh_token",

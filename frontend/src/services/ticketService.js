@@ -7,7 +7,7 @@ function cleanParams(params = {}) {
 }
 
 // --- Ticket Management ---
-export async function createTicket(payload) {
+export async function createTicket(payload, attachments = []) {
   const body = {
     subject: payload.subject,
     body: payload.body ?? payload.description ?? payload.body_redacted,
@@ -16,7 +16,51 @@ export async function createTicket(payload) {
     priority: payload.priority || null,
   };
 
-  const { data } = await api.post("/tickets/", body);
+  const { data: ticket } = await api.post("/tickets/", body);
+
+  if (attachments && attachments.length > 0 && ticket?.id) {
+    try {
+      const formData = new FormData();
+      for (const item of attachments) {
+        const fileObj = item.file || item;
+        if (fileObj instanceof File || fileObj instanceof Blob) {
+          formData.append("files", fileObj);
+        }
+      }
+      const { data: uploadedFiles } = await api.post(
+        `/tickets/${ticket.id}/attachments`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+      ticket.attachments = uploadedFiles;
+    } catch (err) {
+      console.warn("[ticketService] Failed to upload attachments:", err);
+    }
+  }
+
+  return ticket;
+}
+
+export async function uploadTicketAttachments(ticketId, files = []) {
+  const formData = new FormData();
+  for (const item of files) {
+    const fileObj = item.file || item;
+    if (fileObj instanceof File || fileObj instanceof Blob) {
+      formData.append("files", fileObj);
+    }
+  }
+  const { data } = await api.post(`/tickets/${ticketId}/attachments`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function getTicketAttachments(ticketId) {
+  const { data } = await api.get(`/tickets/${ticketId}/attachments`);
   return data;
 }
 

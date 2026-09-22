@@ -7,6 +7,8 @@ import {
   Lock,
   User,
   ShieldAlert,
+  ExternalLink,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useTicketDetail } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
@@ -15,6 +17,7 @@ import SLAWatcher from "../../components/agent/SLAWatcher";
 import Loader from "../../components/common/Loader";
 import * as ticketService from "../../services/ticketService";
 import { formatDateTime, formatRelativeTime } from "../../utils/formatters";
+import { getAttachmentUrl, isImageAttachment } from "../../utils/attachments";
 import clsx from "clsx";
 import { STATUS_COLORS } from "../../utils/constants";
 import { useReplyRealtime } from "../../hooks/useReplyRealtime";
@@ -143,26 +146,50 @@ export default function TicketDetail() {
           {ticket.body_redacted || ticket.body || ticket.description}
         </div>
 
-        {/* Attached Files (Feature 2) */}
+        {/* Attached Files */}
         {ticket.attachments && ticket.attachments.length > 0 && (
           <div className="mt-4 border-t border-surface-border pt-3">
-            <p className="text-xs font-medium text-gray-400 mb-2 flex items-center gap-1.5">
+            <p className="text-xs font-medium text-gray-400 mb-2.5 flex items-center gap-1.5">
               <Paperclip className="h-3.5 w-3.5 text-accent" />
               <span>Attached Files ({ticket.attachments.length}):</span>
             </p>
-            <div className="flex flex-wrap gap-2">
-              {ticket.attachments.map((file, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-bg px-3 py-1.5 text-xs text-gray-300"
-                >
-                  <FileText className="h-4 w-4 text-accent" />
-                  <span>{file.name || `Attachment-${idx + 1}`}</span>
-                  {file.size && (
-                    <span className="text-gray-500">({file.size})</span>
-                  )}
-                </div>
-              ))}
+            <div className="flex flex-wrap gap-2.5">
+              {ticket.attachments.map((file, idx) => {
+                const displayName =
+                  file.name || file.filename || `Attachment ${idx + 1}`;
+                const isImage = isImageAttachment(
+                  displayName,
+                  file.content_type
+                );
+                const fileUrl = getAttachmentUrl(file.url);
+                const sizeLabel = file.size || file.size_formatted;
+
+                return (
+                  <a
+                    key={file.id || idx}
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group inline-flex items-center gap-2 rounded-xl border border-surface-border bg-surface-bg/90 px-3 py-2 text-xs text-gray-300 transition-all hover:border-accent hover:bg-surface-bg hover:text-white shadow-sm cursor-pointer"
+                    title={`Open ${displayName}`}
+                  >
+                    {isImage ? (
+                      <ImageIcon className="h-4 w-4 text-accent shrink-0 transition-transform group-hover:scale-110" />
+                    ) : (
+                      <FileText className="h-4 w-4 text-accent shrink-0 transition-transform group-hover:scale-110" />
+                    )}
+                    <span className="truncate max-w-[200px] font-medium">
+                      {displayName}
+                    </span>
+                    {sizeLabel && (
+                      <span className="text-[11px] text-gray-500">
+                        ({sizeLabel})
+                      </span>
+                    )}
+                    <ExternalLink className="h-3 w-3 text-gray-500 transition-colors group-hover:text-accent shrink-0" />
+                  </a>
+                );
+              })}
             </div>
           </div>
         )}
