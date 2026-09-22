@@ -1,60 +1,44 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as ticketService from "../services/ticketService";
 
-/**
- * Generic ticket-list hook.
- * mode: "mine" (customer's own tickets) or "queue" (agent queue)
- */
+// Cached ticket-list hook with background revalidation.
+// mode: "mine" (customer) or "queue" (agent)
+
 export function useTickets(mode = "mine", params = {}) {
-  const [tickets, setTickets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryKey = ["tickets", mode, params];
 
-  const fetchTickets = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data =
-        mode === "queue"
-          ? await ticketService.getQueue(params)
-          : await ticketService.getMyTickets(params);
-      setTickets(data);
-    } catch (err) {
-      setError(err.response?.data?.detail || "Failed to load tickets");
-    } finally {
-      setLoading(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, JSON.stringify(params)]);
+  const query = useQuery({
+    queryKey,
+    queryFn: () =>
+      mode === "queue"
+        ? ticketService.getQueue(params)
+        : ticketService.getMyTickets(params),
+    placeholderData: (previousData) => previousData, // Keeps previous list visible during filter/page switches
+  });
 
-  useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
-
-  return { tickets, loading, error, refetch: fetchTickets };
+  return {
+    tickets: query.data || [],
+    loading: query.isLoading, // Only true on first cold fetch when no cache exists
+    isFetching: query.isFetching, // True during background refreshes
+    error: query.error?.response?.data?.detail || query.error?.message || null,
+    refetch: query.refetch,
+  };
 }
 
 export function useTicketDetail(ticketId) {
-  const [ticket, setTicket] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
 
-  const fetchTicket = useCallback(async () => {
-    if (!ticketId) return;
-    setLoading(true);
-    try {
-      const data = await ticketService.getTicketById(ticketId);
-      setTicket(data);
-    } catch (err) {
-      setError(err.response?.data?.detail || "Failed to load ticket");
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId]);
+  const query = useQuery({
+    queryKey: ["ticket", ticketId],
+    queryFn: () => ticketService.getTicketById(ticketId),
+    enabled: Boolean(ticketId),
+  });
 
-  useEffect(() => {
-    fetchTicket();
-  }, [fetchTicket]);
-
-  return { ticket, loading, error, refetch: fetchTicket };
+  return {
+    ticket: query.data || null,
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error?.response?.data?.detail || query.error?.message || null,
+    refetch: query.refetch,
+  };
 }

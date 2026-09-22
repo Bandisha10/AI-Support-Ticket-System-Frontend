@@ -10,6 +10,7 @@ from fastapi.responses import RedirectResponse, Response
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select, func as sa_func, case, extract
 from sqlalchemy.ext.asyncio import AsyncSession
+from cachetools import TTLCache
 
 from backend.app.config import settings
 from backend.app.core.supabase_client import supabase_admin
@@ -31,11 +32,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 crud = CRUDBase(Ticket)
+analytics_cache = TTLCache(maxsize=100, ttl=60)
 
 STORAGE_BUCKET = getattr(settings, "SUPABASE_STORAGE_BUCKET", "ticket-attachments")
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".doc", ".docx", ".txt"}
-
 
 def _format_size(size_bytes: int | None) -> str:
     if not size_bytes:
@@ -151,8 +152,8 @@ async def list_tickets(
     assigned_to_me: bool | None = Query(None),
     unassigned: bool | None = Query(None),
     needs_triage: bool | None = Query(None),  # <--- NEW PARAM
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0, description="Pagination offset (>= 0)"),
+    limit: int = Query(50, ge=1, le=100, description="Max items per page (1-100)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -259,6 +260,10 @@ async def get_analytics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.admin, UserRole.agent))
 ):
+    cache_key = f"analytics_{date_range}_{start_date}_{end_date}"
+    if cache_key in analytics_cache:
+        return analytics_cache[cache_key]
+
     now = datetime.now()
     five_days_ago = now - timedelta(days=5)
     ten_days_ago = now - timedelta(days=10)
@@ -362,7 +367,7 @@ async def get_analytics(
             "rating": agent_rating
         })
 
-    return {
+    response_data = {
         "total_tickets": total_tickets,
         "total_tickets_trend": total_tickets_trend,
         "avg_response_label": "1h 30m",
@@ -370,13 +375,13 @@ async def get_analytics(
         "resolved_count": resolved_count,
         "closed_count": closed_count,
         "open_count": open_count,
-        "sla_compliance": {
-            "csat": csat
-        },
+        "sla_compliance": {"csat": csat},
         "tickets_by_category": tickets_by_category,
         "tickets_by_status": tickets_by_status,
         "agent_performance": agent_performance
     }
+    analytics_cache[cache_key] = response_data
+    return response_data
 
 @router.get("/analytics/agent")
 async def get_agent_analytics(
@@ -669,6 +674,20 @@ async def download_ticket_attachment(
         raise HTTPException(403, "Not allowed")
 
     safe_name = os.path.basename(filename)
+    if not safe_name or "\x00" in safe_name:
+        raise HTTPException(400, "Invalid filename")
+
+    # Validate that this attachment belongs to this ticket in the database
+    att_result = await db.execute(
+        select(Attachment).where(
+            Attachment.ticket_id == ticket_id,
+            Attachment.filename == safe_name,
+        )
+    )
+    attachment_record = att_result.scalar_one_or_none()
+    if not attachment_record:
+        raise HTTPException(404, "Attachment not found for this ticket")
+
     signed_url = await _get_signed_url_safe(ticket_id, safe_name, expires_in=300)
 
     # Redirect client directly to the fast, temporary CDN signed link

@@ -1,13 +1,32 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
 from backend.app.models.enums import TicketPriority, TicketSentiment, TicketStatus
 
 class TicketCreate(BaseModel):
-    subject: str
-    body: str
-    
+    subject: str = Field(
+        ...,
+        min_length=3,
+        max_length=200,
+        description="Ticket subject (3-200 characters)",
+    )
+    body: str = Field(
+        ...,
+        min_length=5,
+        max_length=10000,
+        description="Ticket body description (5-10000 characters)",
+    )
+
+    @field_validator("subject", "body")
+    @classmethod
+    def sanitize_text(cls, v: str) -> str:
+        if "\x00" in v:
+            raise ValueError("Null bytes are forbidden")
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Field cannot be empty or blank whitespace")
+        return cleaned
 
 class TicketUpdate(BaseModel):
     category_id: UUID | None = None
@@ -16,7 +35,7 @@ class TicketUpdate(BaseModel):
     priority: TicketPriority | None = None
     sentiment: TicketSentiment | None = None
     status: TicketStatus | None = None
-    classification_confidence: Decimal | None = None
+    classification_confidence: Decimal | None = Field(None, ge=0.0, le=1.0)
 
 class AttachmentRead(BaseModel):
     id: UUID | str | None = None
@@ -30,7 +49,6 @@ class AttachmentRead(BaseModel):
     size_formatted: str | None = None
     created_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
-
 
 class TicketRead(BaseModel):
     id: UUID

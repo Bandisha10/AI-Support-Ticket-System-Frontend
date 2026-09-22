@@ -1,9 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import App from "./App.jsx";
-import { AuthProvider } from "./context/AuthContext.jsx";
-import { RoleProvider } from "./context/RoleContext.jsx";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import App from "./App";
+import { AuthProvider } from "./context/AuthContext";
+import { RoleProvider } from "./context/RoleContext";
 import "./index.css";
 
 // Force HTTPS on production domains
@@ -16,14 +17,27 @@ if (
   );
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 3, // 3 minutes: instant display from cache without refetching
+      gcTime: 1000 * 60 * 10,    // 10 minutes cache retention in memory
+      refetchOnWindowFocus: false, // Prevents sudden flashes when switching browser tabs
+      retry: 1,
+    },
+  },
+});
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <RoleProvider>
-          <App />
-        </RoleProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <RoleProvider>
+            <App />
+          </RoleProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </React.StrictMode>
 );

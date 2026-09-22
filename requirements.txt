@@ -1,30 +1,47 @@
+# Web Framework & Server
 fastapi==0.141.1
 uvicorn==0.52.4
+starlette==1.6.0
+python-multipart==0.0.12
+slowapi==0.1.10
+
+# Database & ORM
 SQLAlchemy==2.0.52
 alembic==1.19.1
 asyncpg==0.31.0
 supabase==2.24.0
+
+# Validation & Settings
 pydantic==2.13.4
 pydantic-settings==2.6.1
-python-dotenv==1.0.1
 email-validator==2.2.0
+python-dotenv==1.0.1
+
+# Authentication & Security
 python-jose==3.3.0
 PyJWT==2.13.0
 cryptography==50.0.0
 argon2-cffi==25.1.0
-httpx
+
+# HTTP & Network Clients
+httpx==0.28.1
+
+# Caching & In-Memory Storage
+cachetools==7.2.0
+
+# AI, ML & NLP
 google-genai==2.16.0
-torch
-transformers
-datasets
-accelerate
-safetensors
-tokenizers
-huggingface_hub
-numpy
-scipy
-scikit-learn
-gensim
+torch==2.14.0
+transformers==5.16.1
+tokenizers==0.23.2
+huggingface_hub==1.32.0
+safetensors==0.8.0
+accelerate==1.14.0
+datasets==5.0.1
+numpy==2.5.2
+scipy==1.18.1
+scikit-learn==1.9.0
+gensim==4.4.0
+
+# Monitoring & Error Tracking
 sentry-sdk==2.68.1
-python-multipart==0.0.12
-slowapi==0.1.9
