@@ -230,7 +230,9 @@ export default function TicketDetail() {
                       </span>
                     ) : (
                       <span className="font-semibold text-gray-200">
-                        {r.author_name || "Support Staff"}
+                        {r.author_id === ticket.customer_id
+                          ? ticket.customer_name || ticket.customer_email || "Customer"
+                          : r.author_name || "Support Staff"}
                       </span>
                     )}
                     {r.is_auto_reply && (
