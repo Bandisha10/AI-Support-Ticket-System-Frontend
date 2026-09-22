@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Send, Star, Paperclip, FileText, CheckCircle2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Send,
+  Star,
+  Paperclip,
+  FileText,
+  CheckCircle2,
+} from "lucide-react";
 import { useTicketDetail } from "../../hooks/useTickets";
 import * as ticketService from "../../services/ticketService";
 import { useToast } from "../../components/common/Toast";
@@ -27,7 +34,9 @@ export default function CustomerTicketDetail() {
   // Check if user already rated this ticket
   useEffect(() => {
     if (!ticketId) return;
-    const stored = JSON.parse(localStorage.getItem("deskwise_ticket_ratings") || "{}");
+    const stored = JSON.parse(
+      localStorage.getItem("deskwise_ticket_ratings") || "{}",
+    );
     if (stored[ticketId]) {
       setHasRated(true);
       setExistingRating(stored[ticketId]);
@@ -82,8 +91,16 @@ export default function CustomerTicketDetail() {
     setExistingRating({ rating: stars });
   }
 
-  if (loading || !ticket) return <Loader fullScreen />;
-  if (error) return <p className="p-8 text-sm text-red-400">{error}</p>;
+  if (loading) return <Loader fullScreen />;
+  if (error || !ticket) {
+    return (
+      <NotFound
+        type="ticket"
+        ticketId={ticketId}
+        customMessage={error || "We could not find the requested ticket."}
+      />
+    );
+  }
 
   const isClosedOrResolved =
     ticket.status === "resolved" || ticket.status === "closed";
@@ -114,7 +131,7 @@ export default function CustomerTicketDetail() {
           <span
             className={clsx(
               "shrink-0 rounded-full px-3 py-1 text-xs font-semibold capitalize",
-              STATUS_COLORS[ticket.status]
+              STATUS_COLORS[ticket.status],
             )}
           >
             {ticket.status?.replace("_", " ")}
@@ -159,7 +176,8 @@ export default function CustomerTicketDetail() {
                   <span>How was your support experience?</span>
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">
-                  This ticket is {ticket.status?.replace("_", " ")}. Help us improve by leaving a quick rating!
+                  This ticket is {ticket.status?.replace("_", " ")}. Help us
+                  improve by leaving a quick rating!
                 </p>
               </div>
               <Button
@@ -207,7 +225,8 @@ export default function CustomerTicketDetail() {
             {replies
               .filter((r) => !r.is_internal_note)
               .map((r) => {
-                const isCustomer = r.author_id === ticket.customer_id || r.is_customer;
+                const isCustomer =
+                  r.author_id === ticket.customer_id || r.is_customer;
                 return (
                   <div
                     key={r.id}
@@ -215,7 +234,7 @@ export default function CustomerTicketDetail() {
                       "rounded-2xl border p-4.5 transition-colors",
                       isCustomer
                         ? "border-accent/30 bg-accent/5 ml-8"
-                        : "border-surface-border bg-surface-card mr-8"
+                        : "border-surface-border bg-surface-card mr-8",
                     )}
                   >
                     <div className="flex items-center justify-between text-xs mb-2">
@@ -249,7 +268,11 @@ export default function CustomerTicketDetail() {
               className="w-full rounded-xl border border-surface-border bg-surface-bg px-3.5 py-2.5 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
             />
             <div className="flex justify-end">
-              <Button type="submit" loading={sending} className="flex items-center gap-1.5 px-5 py-2">
+              <Button
+                type="submit"
+                loading={sending}
+                className="flex items-center gap-1.5 px-5 py-2"
+              >
                 <Send className="h-3.5 w-3.5" />
                 <span>Send Reply</span>
               </Button>

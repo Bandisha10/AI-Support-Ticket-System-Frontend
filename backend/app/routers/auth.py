@@ -17,7 +17,7 @@ from backend.app.core.security import (
     create_password_reset_token,
     verify_password_reset_token,
 )
-from backend.app.core.supabase_client import make_anon_client, supabase, supabase_admin
+from backend.app.core.supabase_client import make_anon_client,supabase_admin
 from backend.app.database import get_db
 from backend.app.dependencies import get_access_token, get_current_user, get_token_claims
 from backend.app.models.department import Department
@@ -35,7 +35,6 @@ from backend.app.schemas.auth import (
     TokenResponse,
 )
 from backend.app.schemas.user import UserProfileUpdate, UserRead
-
 from backend.app.core.limiter import limiter
 
 logger = logging.getLogger(__name__)

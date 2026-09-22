@@ -23,6 +23,7 @@ import Settings from "./pages/admin/Settings";
 import AdminTicketPanel from "./pages/admin/TicketPanel";
 import TicketHistory from "./pages/customer/TicketHistory";
 import CompleteProfile from "./pages/CompleteProfile";
+import NotFound from "./pages/NotFound";
 
 function HomeRedirect() {
   const { homeRoute } = useAuth();
@@ -156,10 +157,13 @@ export default function App() {
             </Route>
 
             {/* Fallback */}
+                        {/* Fallback and 404 Routes */}
+            <Route path="/404" element={<NotFound />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/" element={<HomeRedirect />} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFound />} />
+
           </Routes>
         </NotificationProvider>
       </ToastProvider>

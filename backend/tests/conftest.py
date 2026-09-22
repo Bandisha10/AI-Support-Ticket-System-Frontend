@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from backend.app.config import settings
 from backend.app.database import get_db
-from backend.app.dependencies import get_current_user
 from backend.app.main import app
 from backend.app.models.enums import AgentTier, UserRole
 from backend.app.models.user import User

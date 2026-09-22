@@ -2,12 +2,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
 
 from backend.app.database import get_db
 from backend.app.models.department import Department
 from backend.app.models.ticket import Ticket
-from backend.app.models.user import User
 from backend.app.models.enums import UserRole
 from backend.app.schemas.department import DepartmentCreate, DepartmentUpdate, DepartmentRead
 from backend.app.crud.base import CRUDBase
