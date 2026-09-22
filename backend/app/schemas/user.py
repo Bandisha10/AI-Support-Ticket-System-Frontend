@@ -1,5 +1,4 @@
-# backend/app/schemas/user.py
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from uuid import UUID
 from datetime import datetime
 from backend.app.models.enums import AgentTier, UserRole
@@ -25,28 +24,37 @@ class UserRead(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
-    first_name: str | None = None
-    last_name: str | None = None
-    phone_number: str | None = None
+    first_name: str | None = Field(None, min_length=1, max_length=50)
+    last_name: str | None = Field(None, min_length=1, max_length=50)
+    phone_number: str | None = Field(None, max_length=20, pattern=r"^\+?[0-9\s\-()]{7,20}$")
 
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def clean_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        if "\x00" in v:
+            raise ValueError("Null bytes are forbidden")
+        return v.strip()
 
 
 class UserUpdate(BaseModel):
     role: UserRole | None = None
     department_id: UUID | None = None
     is_active: bool | None = None
-    phone_number: str | None = None
-    first_name: str | None = None
-    last_name: str | None = None
+    phone_number: str | None = Field(None, max_length=20, pattern=r"^\+?[0-9\s\-()]{7,20}$")
+    first_name: str | None = Field(None, min_length=1, max_length=50)
+    last_name: str | None = Field(None, min_length=1, max_length=50)
     agent_tier: AgentTier | None = None
 
 
 class AgentInvite(BaseModel):
     email: EmailStr
     department_id: UUID
-    first_name: str
-    last_name: str
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
     agent_tier: AgentTier = AgentTier.regular
+
 
 
 class AgentInviteResponse(BaseModel):

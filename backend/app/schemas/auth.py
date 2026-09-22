@@ -1,5 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
-
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from backend.app.config import settings
 
 class SignUpRequest(BaseModel):
@@ -8,10 +7,24 @@ class SignUpRequest(BaseModel):
         min_length=settings.MIN_PASSWORD_LENGTH,
         max_length=settings.MAX_PASSWORD_LENGTH,
     )
-    first_name: str
-    last_name: str
-    phone_number: str | None = None
-    
+    first_name: str = Field(..., min_length=1, max_length=50)
+    last_name: str = Field(..., min_length=1, max_length=50)
+    phone_number: str | None = Field(
+        None,
+        max_length=20,
+        pattern=r"^\+?[0-9\s\-()]{7,20}$",
+    )
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        if "\x00" in v:
+            raise ValueError("Null bytes are forbidden")
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Name cannot be empty")
+        return cleaned
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
