@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_db
@@ -17,7 +17,13 @@ async def create_policy(payload: SLAPolicyCreate, db: AsyncSession = Depends(get
     return await crud.create(db, payload.model_dump())
 
 @router.get("/", response_model=list[SLAPolicyRead], dependencies=[Depends(get_current_user)])
-async def list_policies(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def list_sla_policies(
+    response: Response,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "private, max-age=300, stale-while-revalidate=600"
     return await crud.get_all(db, skip, limit)
 
 @router.get("/{policy_id}", response_model=SLAPolicyRead, dependencies=[Depends(get_current_user)])

@@ -1,5 +1,5 @@
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +22,11 @@ async def create_department(payload: DepartmentCreate, db: AsyncSession = Depend
     return await crud.create(db, payload.model_dump())
 
 @router.get("/", response_model=list[DepartmentWithCount], dependencies=[Depends(get_current_user)])
-async def list_departments(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def list_departments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
     query = (
         select(Department, func.count(Ticket.id).label("ticket_count"))
         .outerjoin(Ticket, Ticket.department_id == Department.id)
