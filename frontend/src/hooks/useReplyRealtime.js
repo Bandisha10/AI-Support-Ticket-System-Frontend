@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { supabase } from "../services/supabaseClient";
+import { supabase } from "../utils/supabase";
 
 /**
  * Subscribes to new replies on a single ticket and invokes onNewReply
