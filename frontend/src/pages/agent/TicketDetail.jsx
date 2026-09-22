@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -20,7 +20,7 @@ import { formatDateTime, formatRelativeTime } from "../../utils/formatters";
 import { getAttachmentUrl, isImageAttachment } from "../../utils/attachments";
 import clsx from "clsx";
 import { STATUS_COLORS } from "../../utils/constants";
-import NotFound from "../NotFound";
+import { useReplyRealtime } from "../../hooks/useReplyRealtime";
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
@@ -45,6 +45,15 @@ export default function TicketDetail() {
       setRepliesLoading(false);
     }
   }
+
+  const handleNewReply = useCallback((newReply) => {
+    setReplies((prev) => {
+      if (prev.some((r) => r.id === newReply.id)) return prev;
+      return [...prev, newReply];
+    });
+  }, []);
+
+  useReplyRealtime(ticketId, handleNewReply);
 
   async function handleStatusChange(e) {
     await ticketService.updateTicketStatus(ticketId, e.target.value);

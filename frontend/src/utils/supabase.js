@@ -19,6 +19,7 @@ if (
   );
 }
 
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
