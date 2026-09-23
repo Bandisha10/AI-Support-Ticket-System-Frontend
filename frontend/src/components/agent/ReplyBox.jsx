@@ -47,20 +47,37 @@ export default function ReplyBox({ ticketId, onSent }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".pdf", ".doc", ".docx", ".txt"];
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
   function handleFileSelect(files) {
     const fileList = Array.from(files || []);
     if (!fileList.length) return;
 
-    const newAttachments = fileList.map((file) => ({
-      id: Math.random().toString(36).substring(2, 9),
-      file,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
-    }));
+    const validAttachments = [];
+    for (const file of fileList) {
+      const ext = "." + file.name.split(".").pop().toLowerCase();
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        showToast(`"${file.name}" has an unsupported format. Allowed: PNG, JPG, WEBP, PDF, DOC, TXT`, "error");
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        showToast(`"${file.name}" exceeds the 5 MB file size limit.`, "error");
+        continue;
+      }
+      validAttachments.push({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      });
+    }
 
-    setAttachments((prev) => [...prev, ...newAttachments]);
+    if (validAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...validAttachments]);
+    }
   }
 
   function removeAttachment(id) {
@@ -78,25 +95,39 @@ export default function ReplyBox({ ticketId, onSent }) {
   }
 
   async function handleSend() {
-    if (!message.trim() && attachments.length === 0) return;
+    const hasMessage = Boolean(message.trim());
+    const hasAttachments = attachments.length > 0;
+    if (!hasMessage && !hasAttachments) return;
+
     setSending(true);
     try {
-      if (attachments.length > 0) {
-        // Backend file upload endpoint contract note:
-        // When multipart/form-data upload is added on backend, pass attachments
-        console.info(
-          "[ReplyBox] Outgoing reply attachments (pending backend upload endpoint integration):",
-          attachments.map((a) => ({ name: a.name, size: a.size, type: a.type }))
-        );
+      if (hasAttachments) {
+        await ticketService.uploadTicketAttachments(ticketId, attachments);
       }
 
-      await ticketService.sendAgentReply(ticketId, message, isInternal);
+      if (hasMessage) {
+        await ticketService.sendAgentReply(ticketId, message, isInternal);
+      }
+
+      // Cleanup preview URLs
+      attachments.forEach((a) => {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
+      });
+
       setMessage("");
       setAttachments([]);
-      showToast(isInternal ? "Internal note added" : "Reply sent to customer", "success");
+
+      if (hasMessage && hasAttachments) {
+        showToast(isInternal ? "Internal note & attachments added" : "Reply & attachments sent to customer", "success");
+      } else if (hasAttachments) {
+        showToast("Attachments uploaded to ticket successfully", "success");
+      } else {
+        showToast(isInternal ? "Internal note added" : "Reply sent to customer", "success");
+      }
+
       onSent?.();
     } catch (err) {
-      showToast(err.response?.data?.detail || "Failed to send reply", "error");
+      showToast(err.response?.data?.detail || "Failed to send reply or upload attachments", "error");
     } finally {
       setSending(false);
     }
@@ -131,11 +162,11 @@ export default function ReplyBox({ ticketId, onSent }) {
         setIsDragging(false);
         if (e.dataTransfer.files?.length) handleFileSelect(e.dataTransfer.files);
       }}
-      className={`space-y-3 rounded-2xl border bg-surface-card p-4 transition-colors ${
+      className={`w-full space-y-4 rounded-2xl border bg-surface-card p-6 shadow-sm transition-colors ${
         isDragging ? "border-accent bg-accent/5" : "border-surface-border"
       }`}
     >
-      <div className="flex items-center justify-between border-b border-surface-border pb-2.5">
+      <div className="flex items-center justify-between border-b border-surface-border pb-3">
         <div className="flex items-center gap-2">
           {/* Templates Dropdown (Feature 5) */}
           <div className="relative" ref={templateMenuRef}>
@@ -188,8 +219,12 @@ export default function ReplyBox({ ticketId, onSent }) {
             ref={fileInputRef}
             type="file"
             multiple
+            accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx,.txt"
             className="hidden"
-            onChange={(e) => handleFileSelect(e.target.files)}
+            onChange={(e) => {
+              handleFileSelect(e.target.files);
+              e.target.value = "";
+            }}
           />
         </div>
 
@@ -214,7 +249,7 @@ export default function ReplyBox({ ticketId, onSent }) {
             ? "Write an internal note for your team (customer will not see this)…"
             : "Write a reply to the customer or drag & drop files here…"
         }
-        className="w-full rounded-lg border border-surface-border bg-surface-bg px-3 py-2.5 text-sm text-gray-200 placeholder:text-gray-600 focus:border-accent focus:outline-none"
+        className="w-full rounded-xl border border-surface-border bg-surface-bg p-4 text-sm text-gray-200 placeholder:text-gray-500 focus:border-accent focus:outline-none transition-colors"
       />
 
       {/* Selected Attachments Preview */}

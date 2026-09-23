@@ -137,6 +137,5 @@ export function NotificationProvider({ children }) {
   );
 }
 
-export function useNotifications() {
-  return useContext(NotificationContext);
-}
+export { NotificationContext };
+export { useNotifications } from "../hooks/useNotifications";

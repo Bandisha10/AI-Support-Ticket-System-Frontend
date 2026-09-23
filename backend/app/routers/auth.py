@@ -149,7 +149,7 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
     if not user:
         raise HTTPException(400, "Signup failed")
 
-    user_uuid = UUID(str(user.id))
+    user_uuid = UUID(user.id)
     email = user.email or payload.email
 
     # Check if Supabase DB trigger already created the user row in public.users
@@ -184,13 +184,13 @@ async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
         # Clean both public.users trigger row and Supabase Auth
         await db.execute(delete(User).where(User.id == user_uuid))
         await db.commit()
-        await run_in_threadpool(supabase_admin.auth.admin.delete_user, str(user.id))
+        await run_in_threadpool(supabase_admin.auth.admin.delete_user, user.id)
         raise HTTPException(409, "Phone number or email is already registered")
     except Exception as exc:
         await db.rollback()
         await db.execute(delete(User).where(User.id == user_uuid))
         await db.commit()
-        await run_in_threadpool(supabase_admin.auth.admin.delete_user, str(user.id))
+        await run_in_threadpool(supabase_admin.auth.admin.delete_user, user.id)
         raise HTTPException(500, f"Database save failed: {exc}")
 
 @router.post("/login", response_model=TokenResponse)

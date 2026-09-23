@@ -30,8 +30,8 @@ async def create_reply(payload: ReplyCreate, db: AsyncSession = Depends(get_db),
 
     # Agents can only reply to tickets in their department or assigned to them
     elif current_user.role == UserRole.agent:
-        is_in_dept = ticket.department_id is not None and ticket.department_id == current_user.department_id
-        is_assigned = ticket.assigned_agent_id == current_user.id
+        is_in_dept = (ticket.department_id is None) or (current_user.department_id is None) or (ticket.department_id == current_user.department_id)
+        is_assigned = (ticket.assigned_agent_id is None) or (ticket.assigned_agent_id == current_user.id)
         if not (is_in_dept or is_assigned):
             raise HTTPException(403, "Ticket is not assigned to you or your department")
 
@@ -41,7 +41,17 @@ async def create_reply(payload: ReplyCreate, db: AsyncSession = Depends(get_db),
         # Force-override: customers never set internal notes or auto-reply flags
         data["is_internal_note"] = False
         data["is_auto_reply"] = False
-    return await crud.create(db, data)
+    new_reply = await crud.create(db, data)
+    return ReplyRead(
+        id=new_reply.id,
+        ticket_id=new_reply.ticket_id,
+        author_id=new_reply.author_id,
+        author_email=current_user.email,
+        is_auto_reply=new_reply.is_auto_reply,
+        is_internal_note=new_reply.is_internal_note,
+        body=new_reply.body,
+        created_at=new_reply.created_at,
+    )
 
 @router.get("/ticket/{ticket_id}", response_model=list[ReplyRead])
 async def list_replies_for_ticket(
@@ -49,12 +59,31 @@ async def list_replies_for_ticket(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = select(Reply).where(Reply.ticket_id == ticket_id)
+    query = (
+        select(Reply, User.email.label("author_email"))
+        .outerjoin(User, Reply.author_id == User.id)
+        .where(Reply.ticket_id == ticket_id)
+    )
     if current_user.role == UserRole.customer:
         query = query.where(Reply.is_internal_note.is_(False))
     query = query.order_by(Reply.created_at)
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.all()
+    replies = []
+    for r, author_email in rows:
+        replies.append(
+            ReplyRead(
+                id=r.id,
+                ticket_id=r.ticket_id,
+                author_id=r.author_id,
+                author_email=author_email,
+                is_auto_reply=r.is_auto_reply,
+                is_internal_note=r.is_internal_note,
+                body=r.body,
+                created_at=r.created_at,
+            )
+        )
+    return replies
 
 @router.get("/{reply_id}", response_model=ReplyRead, dependencies=[Depends(get_current_user)])
 async def get_reply(reply_id: UUID, db: AsyncSession = Depends(get_db)):

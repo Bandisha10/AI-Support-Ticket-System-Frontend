@@ -84,11 +84,20 @@ export default function NotFound({
     location.state?.title ||
     config.title;
 
-  const displayDescription =
+  const rawDesc =
     customMessage ||
     location.state?.message ||
     searchParams.get("message") ||
     config.description;
+
+  const displayDescription =
+    typeof rawDesc === "string"
+      ? rawDesc
+      : Array.isArray(rawDesc)
+      ? rawDesc.join(", ")
+      : typeof rawDesc === "object" && rawDesc !== null
+      ? JSON.stringify(rawDesc)
+      : String(rawDesc || config.description);
 
   const ticketRef =
     propTicketId ||

@@ -20,7 +20,7 @@ engine = create_async_engine(
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False, class_=AsyncSession)
 
 class Base(DeclarativeBase):
-    id:Any
+    pass
 
 async def get_db():
     async with AsyncSessionLocal() as session:

@@ -2,9 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-/* frontend/src/index.css lines 5-7 */
+html {
+  font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
 body {
-  @apply bg-surface-bg text-gray-100 antialiased;
+  @apply bg-surface-bg text-gray-100 antialiased font-sans;
 }
 
 /* Global accessible placeholder contrast */

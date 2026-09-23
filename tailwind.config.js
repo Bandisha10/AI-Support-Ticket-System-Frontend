@@ -3,6 +3,10 @@ export default {
   content: ["./frontend/index.html", "./frontend/src/**/*.{js,jsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["'Inter'", "'Plus Jakarta Sans'", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        display: ["'Plus Jakarta Sans'", "'Inter'", "-apple-system", "sans-serif"],
+      },
       colors: {
         brand: {
           50: "#eef4ff",

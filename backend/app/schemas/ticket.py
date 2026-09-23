@@ -35,7 +35,7 @@ class TicketUpdate(BaseModel):
     priority: TicketPriority | None = None
     sentiment: TicketSentiment | None = None
     status: TicketStatus | None = None
-    classification_confidence: Decimal | None = Field(None, ge=0.0, le=1.0)
+    classification_confidence: Decimal | None = Field(None, ge=Decimal("0.0"), le=Decimal("1.0"))
 
 class AttachmentRead(BaseModel):
     id: UUID | str | None = None

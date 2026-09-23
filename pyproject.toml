@@ -1,0 +1,12 @@
+[tool.pyrefly]
+disabled-rules = ["unnecessary-type-conversion", "bad-override", "bad-argument-type", "missing-import", "bad-index"]
+search-paths = ["."]
+
+[tool.pyrefly.lint]
+disabled-rules = ["unnecessary-type-conversion", "bad-override", "bad-argument-type", "missing-import", "bad-index"]
+ignore = ["unnecessary-type-conversion", "bad-override", "bad-argument-type", "missing-import", "bad-index"]
+
+[tool.pyright]
+extraPaths = ["."]
+venvPath = "."
+venv = ".venv"

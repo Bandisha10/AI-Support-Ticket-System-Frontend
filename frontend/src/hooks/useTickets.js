@@ -4,6 +4,16 @@ import * as ticketService from "../services/ticketService";
 // Cached ticket-list hook with background revalidation.
 // mode: "mine" (customer) or "queue" (agent)
 
+function formatErrorDetail(err) {
+  if (!err) return null;
+  const detail = err.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((d) => (typeof d === "string" ? d : d.msg || d.message || JSON.stringify(d))).join(", ");
+  }
+  return err.message || "An unexpected error occurred.";
+}
+
 export function useTickets(mode = "mine", params = {}) {
   const queryKey = ["tickets", mode, params];
 
@@ -20,14 +30,12 @@ export function useTickets(mode = "mine", params = {}) {
     tickets: query.data || [],
     loading: query.isLoading, // Only true on first cold fetch when no cache exists
     isFetching: query.isFetching, // True during background refreshes
-    error: query.error?.response?.data?.detail || query.error?.message || null,
+    error: formatErrorDetail(query.error),
     refetch: query.refetch,
   };
 }
 
 export function useTicketDetail(ticketId) {
-  const queryClient = useQueryClient();
-
   const query = useQuery({
     queryKey: ["ticket", ticketId],
     queryFn: () => ticketService.getTicketById(ticketId),
@@ -38,7 +46,7 @@ export function useTicketDetail(ticketId) {
     ticket: query.data || null,
     loading: query.isLoading,
     isFetching: query.isFetching,
-    error: query.error?.response?.data?.detail || query.error?.message || null,
+    error: formatErrorDetail(query.error),
     refetch: query.refetch,
   };
 }

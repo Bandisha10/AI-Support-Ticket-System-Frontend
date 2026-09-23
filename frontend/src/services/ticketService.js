@@ -72,27 +72,36 @@ export async function getTickets(params = {}) {
 export const getMyTickets = getTickets;
 export const getQueue = getTickets;
 
+function normalizeUUID(id) {
+  if (!id) return "";
+  return String(id).trim().replace(/[\s_]+/g, "-");
+}
+
 export async function getTicketById(ticketId) {
-  const { data } = await api.get(`/tickets/${ticketId}`);
+  const cleanId = normalizeUUID(ticketId);
+  const { data } = await api.get(`/tickets/${cleanId}`);
   return data;
 }
 
 export async function assignTicket(ticketId, agentId) {
-  const { data } = await api.put(`/tickets/${ticketId}`, {
+  const cleanId = normalizeUUID(ticketId);
+  const { data } = await api.put(`/tickets/${cleanId}`, {
     assigned_agent_id: agentId,
   });
   return data;
 }
 
 export async function updateTicketStatus(ticketId, status) {
-  const { data } = await api.put(`/tickets/${ticketId}`, { status });
+  const cleanId = normalizeUUID(ticketId);
+  const { data } = await api.put(`/tickets/${cleanId}`, { status });
   return data;
 }
 
 // --- Reply Management (Unified) ---
 export async function createReply(ticketId, message, isInternal = false) {
+  const cleanId = normalizeUUID(ticketId);
   const { data } = await api.post("/replies/", {
-    ticket_id: ticketId,
+    ticket_id: cleanId,
     body: message,
     is_internal_note: Boolean(isInternal),
     is_auto_reply: false,
@@ -103,7 +112,8 @@ export const addCustomerReply = (ticketId, msg) => createReply(ticketId, msg, fa
 export const sendAgentReply = (ticketId, msg, isInternal = false) => createReply(ticketId, msg, isInternal);
 
 export async function getTicketReplies(ticketId) {
-  const { data } = await api.get(`/replies/ticket/${ticketId}`);
+  const cleanId = normalizeUUID(ticketId);
+  const { data } = await api.get(`/replies/ticket/${cleanId}`);
   return data;
 }
 
