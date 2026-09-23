@@ -183,55 +183,64 @@ async def list_tickets(
     department_id: UUID | None = None,
     assigned_to_me: bool | None = Query(None),
     unassigned: bool | None = Query(None),
-    needs_triage: bool | None = Query(None),  # <--- NEW PARAM
+    needs_triage: bool | None = Query(None),
     skip: int = Query(0, ge=0, description="Pagination offset (>= 0)"),
     limit: int = Query(50, ge=1, le=100, description="Max items per page (1-100)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    status_val = status_ if not hasattr(status_, "default") else status_.default
+    priority_val = priority if not hasattr(priority, "default") else priority.default
+    dept_id_val = department_id if not hasattr(department_id, "default") else department_id.default
+    assigned_to_me_val = assigned_to_me if not hasattr(assigned_to_me, "default") else assigned_to_me.default
+    unassigned_val = unassigned if not hasattr(unassigned, "default") else unassigned.default
+    needs_triage_val = needs_triage if not hasattr(needs_triage, "default") else needs_triage.default
+    skip_val = int(skip if not hasattr(skip, "default") else (skip.default or 0))
+    limit_val = int(limit if not hasattr(limit, "default") else (limit.default or 50))
+
     query = (
         select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
         .outerjoin(User, Ticket.customer_id == User.id)
         .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
     )
 
-        # Role-based filtering
+    # Role-based filtering
     if current_user.role == UserRole.customer:
         query = query.where(Ticket.customer_id == current_user.id)
     elif current_user.role == UserRole.agent:
-        if assigned_to_me:
+        if assigned_to_me_val:
             query = query.where(Ticket.assigned_agent_id == current_user.id)
-        elif unassigned:
+        elif unassigned_val:
             query = query.where(
-                Ticket.department_id == current_user.department_id,
-                Ticket.assigned_agent_id.is_(None)
+                (Ticket.department_id == current_user.department_id) | (Ticket.department_id.is_(None)),
+                Ticket.assigned_agent_id.is_(None),
             )
         else:
             query = query.where(
                 (Ticket.department_id == current_user.department_id) |
+                (Ticket.department_id.is_(None)) |
                 (Ticket.assigned_agent_id == current_user.id)
             )
     elif current_user.role == UserRole.admin:
-        if not status_:
+        if not status_val:
             query = query.where(Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed]))
 
     # Query param filters
-    if status_:
-        query = query.where(Ticket.status == status_)
-    if priority:
-        query = query.where(Ticket.priority == priority)
-    if department_id:
-        query = query.where(Ticket.department_id == department_id)
-    if assigned_to_me and current_user.role != UserRole.agent:
+    if status_val:
+        query = query.where(Ticket.status == status_val)
+    if priority_val:
+        query = query.where(Ticket.priority == priority_val)
+    if dept_id_val:
+        query = query.where(Ticket.department_id == dept_id_val)
+    if assigned_to_me_val and current_user.role != UserRole.agent:
         query = query.where(Ticket.assigned_agent_id == current_user.id)
-    if unassigned and current_user.role != UserRole.agent:
+    if unassigned_val and current_user.role != UserRole.agent:
         query = query.where(Ticket.assigned_agent_id.is_(None))
 
     # Triage Panel filtering - Admins only
-    if needs_triage is not None and current_user.role == UserRole.admin:
-        if needs_triage:
+    if needs_triage_val is not None and current_user.role == UserRole.admin:
+        if needs_triage_val:
             query = query.where(
-                # If it's NOT manually overridden by an admin (1.0)
                 (Ticket.classification_confidence.is_(None) | (Ticket.classification_confidence != 1.0)) &
                 (
                     (Ticket.department_id.is_(None)) |
@@ -240,14 +249,13 @@ async def list_tickets(
             )
         else:
             query = query.where(
-                # If it WAS manually overridden (1.0) OR it successfully passed AI triage automatically
                 (Ticket.classification_confidence == 1.0) |
                 (
                     (Ticket.classification_confidence >= 0.6) &
                     (Ticket.department_id.is_not(None))
                 )
             )
-    query = query.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
+    query = query.order_by(Ticket.created_at.desc()).offset(skip_val).limit(limit_val)
     result = await db.execute(query)
     rows = result.all()
 
