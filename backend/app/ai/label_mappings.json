@@ -12,5 +12,11 @@
     "high": 0,
     "low": 1,
     "medium": 2
+  },
+
+  "sentiment":{
+    "negative":0,
+    "neutral":1,
+    "positive":2
   }
 }
