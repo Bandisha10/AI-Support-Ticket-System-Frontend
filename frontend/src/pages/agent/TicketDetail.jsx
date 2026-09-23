@@ -25,7 +25,7 @@ import { useReplyRealtime } from "../../hooks/useReplyRealtime";
 export default function TicketDetail() {
   const { ticketId } = useParams();
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { ticket, loading, error, refetch } = useTicketDetail(ticketId);
   const [replies, setReplies] = useState([]);
   const [repliesLoading, setRepliesLoading] = useState(true);
@@ -212,6 +212,8 @@ export default function TicketDetail() {
         ) : (
           replies.map((r) => {
             const isNote = r.is_internal_note;
+            const isFromCustomer = r.author_id ===ticket.customer_id;
+            const isMine = r.author_id == user?.id;
             return (
               <div
                 key={r.id}
@@ -219,7 +221,9 @@ export default function TicketDetail() {
                   "rounded-xl border p-4.5 transition-colors",
                   isNote
                     ? "border-yellow-500/30 bg-yellow-500/5 ml-6"
-                    : "border-surface-border bg-surface-card",
+                    : isFromCustomer
+                    ? "border-surface-border bg-surface-card mr-8"
+                    : "border-accent/30 bg-accent/5 ml-8"
                 )}
               >
                 <div className="flex items-center justify-between text-xs mb-2">
@@ -230,7 +234,11 @@ export default function TicketDetail() {
                       </span>
                     ) : (
                       <span className="font-semibold text-gray-200">
-                        {r.author_name || "Support Staff"}
+                        {isFromCustomer
+                          ? ticket.customer_name || ticket.customer_email || "Customer"
+                          : isMine
+                          ? "You"
+                          : r.author_name || "Support Staff"}
                       </span>
                     )}
                     {r.is_auto_reply && (
