@@ -52,7 +52,9 @@ def _load_models() -> bool:
             priority_model.eval()
 
         sentiment_path = BASE_DIR / "sentiment"
-        if sentiment_path.exists():
+        if not sentiment_path.exists():
+            sentiment_path = BASE_DIR.parent / "model_artifacts"
+        if sentiment_path.exists() and (sentiment_path / "model.safetensors").exists() or (sentiment_path / "pytorch_model.bin").exists() or (sentiment_path / "config.json").exists():
             sentiment_tokenizer = DistilBertTokenizerFast.from_pretrained(sentiment_path)
             sentiment_model = DistilBertForSequenceClassification.from_pretrained(sentiment_path)
             sentiment_model.eval()

@@ -20,7 +20,7 @@ from backend.app.models.user import User
 from backend.app.models.sla_state import SLAState
 from backend.app.models.department import Department
 from backend.app.models.attachment import Attachment
-from backend.app.models.enums import UserRole, TicketStatus, TicketPriority
+from backend.app.models.enums import UserRole, TicketStatus, TicketPriority, TicketSentiment
 from backend.app.schemas.ticket import TicketCreate, TicketUpdate, TicketRead, AttachmentRead
 from backend.app.crud.base import CRUDBase
 from backend.app.dependencies import get_current_user, require_role
@@ -126,24 +126,55 @@ def _ticket_to_read(
 
 @router.post("/", response_model=TicketRead, status_code=201)
 async def create_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ai_result = classify_ticket(payload.subject, payload.body)
+    try:
+        ai_result = classify_ticket(payload.subject, payload.body)
+    except Exception as exc:
+        logger.warning("Classification error during ticket creation: %s", exc)
+        ai_result = {
+            "body_redacted": payload.body,
+            "category": {"label": "general", "confidence": 0.5, "needs_human_review": True},
+            "priority": {"label": "medium", "confidence": 0.5, "needs_human_review": True},
+            "sentiment": {"label": "neutral", "confidence": 0.5, "needs_human_review": True},
+        }
 
-    department_row = (await db.execute(
-        select(Department).where(Department.name == ai_result["category"]["label"])
-    )).scalar_one_or_none()
+    category_label = ai_result.get("category", {}).get("label", "general")
+    department_row = None
+    if category_label:
+        department_row = (await db.execute(
+            select(Department).where(sa_func.lower(Department.name) == category_label.lower())
+        )).scalar_one_or_none()
+
+    # Validate Priority Enum
+    raw_priority = str(ai_result.get("priority", {}).get("label", "medium")).lower()
+    priority_val = TicketPriority.medium
+    if raw_priority in (TicketPriority.low.value, TicketPriority.medium.value, TicketPriority.high.value):
+        priority_val = TicketPriority(raw_priority)
+
+    # Validate Sentiment Enum
+    raw_sentiment = str(ai_result.get("sentiment", {}).get("label", "neutral")).lower()
+    sentiment_val = TicketSentiment.neutral
+    if raw_sentiment in (TicketSentiment.positive.value, TicketSentiment.neutral.value, TicketSentiment.negative.value):
+        sentiment_val = TicketSentiment(raw_sentiment)
+
+    raw_conf = ai_result.get("category", {}).get("confidence", 0.5)
+    try:
+        conf_val = round(float(raw_conf), 3)
+    except Exception:
+        conf_val = 0.5
 
     data = {
         "customer_id": current_user.id,
         "subject": payload.subject,
-        "body_redacted": ai_result["body_redacted"],
+        "body_redacted": ai_result.get("body_redacted", payload.body),
         "category_id": None,
         "department_id": department_row.id if department_row else None,
-        "priority": ai_result["priority"]["label"],
-        "sentiment": ai_result["sentiment"]["label"],
-        "classification_confidence": ai_result["category"]["confidence"],
-        "status": "human_review" if ai_result["category"]["needs_human_review"] else "open",
+        "priority": priority_val,
+        "sentiment": sentiment_val,
+        "classification_confidence": conf_val,
+        "status": TicketStatus.open,
     }
-    return await crud.create(db, data)
+    ticket = await crud.create(db, data)
+    return _ticket_to_read(ticket, current_user.email, attachments=[])
 
 @router.get("/", response_model=list[TicketRead])
 async def list_tickets(
