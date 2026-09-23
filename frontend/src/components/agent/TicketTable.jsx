@@ -9,7 +9,7 @@ import {
   XCircle,
   Loader2,
 } from "lucide-react";
-import { STATUS_COLORS, SENTIMENT_COLORS } from "../../utils/constants"; // SENTIMENT_COLORS is new
+import { STATUS_COLORS, SENTIMENT_COLORS } from "../../utils/constants"; 
 import { formatRelativeTime } from "../../utils/formatters";
 import SLAWatcher from "./SLAWatcher";
 import { useAuth } from "../../hooks/useAuth";
@@ -243,7 +243,7 @@ export default function TicketTable({
                 <th className="py-2.5 px-3">Subject</th>
                 <th className="py-2.5 px-3">Customer</th>
                 <th className="py-2.5 px-3">Priority</th>
-                {/* New: Sentiment column header, sits between Priority and Status */}
+                {/* New: Sentiment column header*/}
                 <th className="py-2.5 px-3">Sentiment</th>
                 <th className="py-2.5 px-3">Status</th>
                 <th className="py-2.5 px-3">SLA</th>
@@ -273,7 +273,7 @@ export default function TicketTable({
                             <span>
                               {" "}
                               ({(t.classification_confidence * 100).toFixed(0)}%
-                              AI confidence)
+                               confidence)
                             </span>
                           )}
                         </div>
