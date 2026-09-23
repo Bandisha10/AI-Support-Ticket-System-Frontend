@@ -9,7 +9,7 @@ import {
   XCircle,
   Loader2,
 } from "lucide-react";
-import { STATUS_COLORS } from "../../utils/constants";
+import { STATUS_COLORS, SENTIMENT_COLORS } from "../../utils/constants"; // SENTIMENT_COLORS is new
 import { formatRelativeTime } from "../../utils/formatters";
 import SLAWatcher from "./SLAWatcher";
 import { useAuth } from "../../hooks/useAuth";
@@ -243,6 +243,8 @@ export default function TicketTable({
                 <th className="py-2.5 px-3">Subject</th>
                 <th className="py-2.5 px-3">Customer</th>
                 <th className="py-2.5 px-3">Priority</th>
+                {/* New: Sentiment column header, sits between Priority and Status */}
+                <th className="py-2.5 px-3">Sentiment</th>
                 <th className="py-2.5 px-3">Status</th>
                 <th className="py-2.5 px-3">SLA</th>
                 <th className="py-2.5 px-3">Opened</th>
@@ -282,6 +284,26 @@ export default function TicketTable({
                     </td>
                     <td className="py-3 px-3 text-xs capitalize text-gray-300">
                       {t.priority || "Normal"}
+                    </td>
+                    {/*
+                      New: Sentiment cell.
+                      Tickets created before this feature shipped will have
+                      sentiment === null, so we fall back to a plain dash
+                      instead of rendering an empty/undefined badge.
+                    */}
+                    <td className="py-3 px-3">
+                      {t.sentiment ? (
+                        <span
+                          className={clsx(
+                            "rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
+                            SENTIMENT_COLORS[t.sentiment],
+                          )}
+                        >
+                          {t.sentiment}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500">—</span>
+                      )}
                     </td>
                     <td className="py-3 px-3">
                       <span

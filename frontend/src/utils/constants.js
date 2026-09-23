@@ -5,3 +5,8 @@ export const STATUS_COLORS = {
   closed: "bg-status-closed/15 text-status-closed border border-status-closed/30",
   breached: "bg-status-breached/15 text-status-breached border border-status-breached/30",
 };
+export const SENTIMENT_COLORS = {
+  positive: "bg-green-500/20 text-green-400",
+  neutral: "bg-gray-500/20 text-gray-400",
+  negative: "bg-red-500/20 text-red-400",
+};

@@ -139,6 +139,7 @@ async def create_ticket(payload: TicketCreate, db: AsyncSession = Depends(get_db
         "category_id": None,
         "department_id": department_row.id if department_row else None,
         "priority": ai_result["priority"]["label"],
+        "sentiment": ai_result["sentiment"]["label"],
         "classification_confidence": ai_result["category"]["confidence"],
         "status": "human_review" if ai_result["category"]["needs_human_review"] else "open",
     }
