@@ -2,23 +2,17 @@ import json
 import logging
 import os
 from pathlib import Path
-
+import httpx
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
 
 from backend.app.ai.redact_pii import redact_pii
 
 load_dotenv()
-
 logger = logging.getLogger(__name__)
 
-CONFIDENCE_THRESHOLD = 0.5
+LOCAL_AI_URL = os.getenv("LOCAL_AI_URL")
 
-DEPT_REPO = "pratik14212/deskwise-departments"
-PRIORITY_REPO = "pratik14212/deskwise-priorities"
-SENTIMENT_REPO = "pratik14212/deskwise-sentiments"
-
-# Load fallback/index label mappings
+# Load mappings
 MAPPINGS_FILE = Path(__file__).parent / "label_mappings.json"
 id_to_dept: dict[str, str] = {}
 id_to_priority: dict[str, str] = {}
@@ -39,49 +33,61 @@ if MAPPINGS_FILE.exists():
     except Exception as exc:
         logger.warning("Could not load label mappings: %s", exc)
 
-# Initialize lightweight Hugging Face client (Zero RAM model storage)
-hf_token = os.getenv("HF_TOKEN") or None
-hf_client = InferenceClient(token=hf_token)
-
 
 def preload_models() -> None:
-    """No-op: Models run serverlessly on Hugging Face infrastructure, saving Render RAM."""
-    logger.info("Hugging Face Serverless Inference client initialized successfully.")
-
-
-def _predict(text: str, repo_id: str, label_map: dict[str, str], default_label: str) -> dict:
-    """Query Hugging Face Serverless API for classification."""
-    try:
-        results = hf_client.text_classification(text, model=repo_id)
-        if results:
-            top = results[0]
-            raw_label = getattr(top, "label", top.get("label", "") if isinstance(top, dict) else "")
-            score = float(getattr(top, "score", top.get("score", 0.0) if isinstance(top, dict) else 0.0))
-
-            label = label_map.get(raw_label, raw_label).strip()
-            confidence = round(score, 3)
-            return {
-                "label": label if label else default_label,
-                "confidence": confidence,
-                "needs_human_review": confidence < CONFIDENCE_THRESHOLD,
-            }
-    except Exception as exc:
-        logger.warning("Inference API call failed for %s: %s", repo_id, exc)
-
-    return {"label": default_label, "confidence": 0.5, "needs_human_review": True}
+    logger.info("AI Service target endpoint: %s", LOCAL_AI_URL or "Default Fallback")
 
 
 def classify_ticket(subject: str, body: str) -> dict:
     raw_text = f"{subject}. {body}" if subject else body
     redacted = redact_pii(raw_text)
 
-    category_result = _predict(redacted.text, DEPT_REPO, id_to_dept, default_label="Customer Experience")
-    priority_result = _predict(redacted.text, PRIORITY_REPO, id_to_priority, default_label="medium")
-    sentiment_result = _predict(redacted.text, SENTIMENT_REPO, id_to_sentiment, default_label="neutral")
+    # 1. Forward request to local machine via tunnel
+    if LOCAL_AI_URL:
+        try:
+            headers = {"bypass-tunnel-reminder": "true"}
+            with httpx.Client(timeout=10.0) as client:
+                res = client.post(
+                    f"{LOCAL_AI_URL.rstrip('/')}/classify",
+                    json={"text": redacted.text},
+                    headers=headers,
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    cat_raw = data["category"]["raw_label"]
+                    prio_raw = data["priority"]["raw_label"]
+                    sent_raw = data["sentiment"]["raw_label"]
 
+                    return {
+                        "body_redacted": redacted.text,
+                        "category": {
+                            "label": id_to_dept.get(cat_raw, "Customer Experience"),
+                            "confidence": data["category"]["score"],
+                            "needs_human_review": data["category"]["score"] < 0.5,
+                        },
+                        "priority": {
+                            "label": id_to_priority.get(prio_raw, "medium"),
+                            "confidence": data["priority"]["score"],
+                            "needs_human_review": data["priority"]["score"] < 0.5,
+                        },
+                        "sentiment": {
+                            "label": id_to_sentiment.get(sent_raw, "neutral"),
+                            "confidence": data["sentiment"]["score"],
+                            "needs_human_review": data["sentiment"]["score"] < 0.5,
+                        },
+                    }
+        except Exception as exc:
+            logger.warning("Local AI Tunnel unreachable (%s). Using fallback.", exc)
+
+    # 2. Render Fallback (if your PC is asleep/tunnel closed)
     return {
         "body_redacted": redacted.text,
-        "category": category_result,
-        "priority": priority_result,
-        "sentiment": sentiment_result,
+        "category": {"label": "Customer Experience", "confidence": 0.5, "needs_human_review": True},
+        "priority": {"label": "medium", "confidence": 0.5, "needs_human_review": True},
+        "sentiment": {"label": "neutral", "confidence": 0.5, "needs_human_review": True},
     }
+
+
+if __name__ == "__main__":
+    result = classify_ticket("Billing issue", "My credit card was charged twice for the monthly plan.")
+    print("\nClassification Result:\n", json.dumps(result, indent=2))
