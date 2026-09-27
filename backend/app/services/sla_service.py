@@ -186,4 +186,4 @@ async def sla_monitor_worker():
             logger.info("SLA Monitor background worker shutting down.")
             break
         except Exception as exc:
-            logger.error("Unexpected error in SLA Monitor worker: %s", exc)
+            logger.error("Unexpected error in SLA Monitor worker: %s", exc, exc_info=True)
