@@ -242,17 +242,6 @@ export default function TicketHistory() {
                       {ticket.status?.replace("_", " ")}
                     </span>
 
-                    {ticket.priority && (
-                      <span
-                        className={clsx(
-                          "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase",
-                          getPriorityBadgeClass(ticket.priority),
-                        )}
-                      >
-                        {ticket.priority}
-                      </span>
-                    )}
-
                     <span className="text-xs font-mono font-medium text-gray-500">
                       #{ticket.id?.slice(0, 8).toUpperCase()}
                     </span>
