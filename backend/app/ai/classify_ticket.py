@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import gc
 from pathlib import Path
 import numpy as np
 import onnxruntime as ort
@@ -50,34 +51,28 @@ _sessions: dict[str, ort.InferenceSession] = {}
 _tokenizers: dict[str, AutoTokenizer] = {}
 
 
+
 def _get_onnx_model(repo_id: str):
     """Download quantized ONNX model from Hugging Face Hub (cached) and create low-memory session."""
     if repo_id not in _sessions:
         token = os.getenv("HF_TOKEN") or None
         _tokenizers[repo_id] = AutoTokenizer.from_pretrained(repo_id, token=token)
-
         model_path = hf_hub_download(
             repo_id=repo_id,
             filename="model_quantized.onnx",
             token=token,
         )
         sess_options = ort.SessionOptions()
-        sess_options.intra_op_num_threads = 1  # Minimal CPU usage on Render free tier
+        sess_options.intra_op_num_threads = 1  # 1 thread keeps CPU/RAM minimal
+        sess_options.enable_mem_pattern = False
         _sessions[repo_id] = ort.InferenceSession(model_path, sess_options, providers=["CPUExecutionProvider"])
-
+        gc.collect()
     return _sessions[repo_id], _tokenizers[repo_id]
 
 
 def preload_models() -> None:
-    """Preload all 3 ONNX models on server startup. Total RAM is under 150 MB."""
-    logger.info("Preloading ONNX classification models...")
-    for repo in (DEPT_REPO, PRIORITY_REPO, SENTIMENT_REPO):
-        try:
-            _get_onnx_model(repo)
-            logger.info("Successfully loaded ONNX model: %s", repo)
-        except Exception as exc:
-            logger.error("Failed to preload ONNX model %s: %s", repo, exc)
-    logger.info("All ONNX classification models ready in memory.")
+    """No-op on startup: load models on-demand to guarantee instant port binding on Render."""
+    logger.info("ONNX models configured for on-demand low-memory loading.")
 
 
 def _softmax(x):
