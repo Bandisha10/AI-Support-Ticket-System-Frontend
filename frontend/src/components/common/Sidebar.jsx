@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, lazy, Suspense } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -27,23 +27,33 @@ import {
   Copy,
   Check,
   ChevronsUpDown,
+  AlertTriangle,
+  UserCheck,
+  MessageSquare,
+  Trash2,
 } from "lucide-react";
-
 import { useNotifications } from "../../context/NotificationContext";
 import { formatRelativeTime, formatDateTime } from "../../utils/formatters";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "./Toast";
 import * as authService from "../../services/authService";
-import ChangePassword from "../../pages/ChangePassword";
+const ChangePassword = lazy(() => import("../../pages/ChangePassword"));
 
 export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { user, logout, isAdmin, isAgent, isCustomer, homeRoute, refreshUser } =
     useAuth();
-  const { notifications, unreadCount, markAsRead, markAllAsRead } =
-    useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    clearAll,
+    removeNotification,
+  } = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifFilter, setNotifFilter] = useState("all");
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const notifMenuRef = useRef(null);
   // User Card Popup & Edit State
@@ -104,7 +114,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     }
   }
 
-  // Close notifications on outside click
+  // Close notifications and user popup on outside click
   useEffect(() => {
     function handleClickOutside(e) {
       if (notifMenuRef.current && !notifMenuRef.current.contains(e.target)) {
@@ -121,12 +131,53 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   function handleNotificationClick(notif) {
     markAsRead(notif.id);
     setShowNotifications(false);
+    if (onClose) onClose(); // Ensures mobile drawer closes smoothly on navigation
     if (notif.ticketId) {
       const dest =
         isCustomer || user?.role === "customer"
           ? `/tickets/${notif.ticketId}`
           : `/agent/tickets/${notif.ticketId}`;
       navigate(dest);
+    }
+  }
+
+  const filteredNotifications = useMemo(() => {
+    if (notifFilter === "unread") {
+      return notifications.filter((n) => !n.read);
+    }
+    return notifications;
+  }, [notifications, notifFilter]);
+
+  function getNotificationIcon(type) {
+    switch (type) {
+      case "sla_breach":
+        return {
+          Icon: AlertTriangle,
+          badgeColor: "bg-red-500/15 text-red-400 border border-red-500/30",
+        };
+      case "assignment":
+        return {
+          Icon: UserCheck,
+          badgeColor:
+            "bg-purple-500/15 text-purple-400 border border-purple-500/30",
+        };
+      case "status_change":
+        return {
+          Icon: Clock,
+          badgeColor:
+            "bg-amber-500/15 text-amber-400 border border-amber-500/30",
+        };
+      case "activity":
+        return {
+          Icon: MessageSquare,
+          badgeColor: "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30",
+        };
+      default:
+        return {
+          Icon: Ticket,
+          badgeColor:
+            "bg-[#f2b705]/15 text-[#f2b705] border border-[#f2b705]/30",
+        };
     }
   }
 
@@ -300,13 +351,18 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
           </Link>
 
           <div className="flex items-center gap-1">
-            {/* Notification Bell */}
+            {/* Notification Bell with Fixed Unclipped Dropdown */}
             <div className="relative" ref={notifMenuRef}>
               <button
                 type="button"
                 onClick={() => setShowNotifications((prev) => !prev)}
-                className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-[#1a1e2d] transition-colors"
+                className={`relative p-2 rounded-lg transition-colors ${
+                  showNotifications
+                    ? "text-[#f2b705] bg-[#1a1e2d]"
+                    : "text-gray-400 hover:text-white hover:bg-[#1a1e2d]"
+                }`}
                 title="Notifications"
+                aria-label="Toggle notifications"
               >
                 <Bell className="h-4 w-4" />
                 {unreadCount > 0 && (
@@ -317,61 +373,134 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
               </button>
 
               {showNotifications && (
-                <div className="fixed inset-x-3 top-14 z-50 max-w-sm mx-auto md:absolute md:inset-auto md:left-full md:top-0 md:ml-2 md:w-80 rounded-2xl border border-[#232838] bg-[#141824] shadow-2xl p-4 max-h-[80vh] overflow-y-auto animate-in fade-in">
-                  <div className="flex items-center justify-between border-b border-[#232838] pb-3 mb-2">
+                <div className="fixed inset-x-3 top-14 z-[999] max-w-sm mx-auto md:fixed md:left-[264px] md:top-3 md:inset-auto md:w-[380px] md:max-w-none rounded-2xl border border-[#232838] bg-[#141824] shadow-2xl p-4 max-h-[85vh] flex flex-col">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-[#232838] pb-3 mb-2.5">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-white">
                         Notifications
                       </h3>
                       {unreadCount > 0 && (
-                        <span className="rounded-full bg-[#f2b705]/20 px-2 py-0.5 text-[10px] font-semibold text-[#f2b705]">
+                        <span className="rounded-full bg-[#f2b705]/20 border border-[#f2b705]/30 px-2 py-0.5 text-[10px] font-semibold text-[#f2b705]">
                           {unreadCount} new
                         </span>
                       )}
                     </div>
-                    {notifications.length > 0 && (
-                      <button
-                        onClick={markAllAsRead}
-                        className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#f2b705]"
-                      >
-                        <CheckCheck className="h-3 w-3" />
-                        <span>Read all</span>
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllAsRead}
+                          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-[#f2b705] transition-colors cursor-pointer"
+                          title="Mark all as read"
+                        >
+                          <CheckCheck className="h-3.5 w-3.5" />
+                          <span>Read all</span>
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button
+                          onClick={clearAll}
+                          className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-red-400 transition-colors cursor-pointer"
+                          title="Clear all notifications"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          <span>Clear</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-                    {notifications.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-gray-500">
-                        No notifications
+                  {/* Filter Tabs (All / Unread) */}
+                  <div className="flex items-center gap-1.5 mb-2.5 bg-[#0b0d13] p-1 rounded-xl border border-[#232838]">
+                    <button
+                      type="button"
+                      onClick={() => setNotifFilter("all")}
+                      className={`flex-1 py-1.5 text-center text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+                        notifFilter === "all"
+                          ? "bg-[#1a1e2d] text-white font-semibold"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      All ({notifications.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNotifFilter("unread")}
+                      className={`flex-1 py-1.5 text-center text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+                        notifFilter === "unread"
+                          ? "bg-[#1a1e2d] text-[#f2b705] font-semibold"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      Unread ({unreadCount})
+                    </button>
+                  </div>
+
+                  {/* Notification List */}
+                  <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 max-h-[360px]">
+                    {filteredNotifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-gray-500">
+                        {notifFilter === "unread"
+                          ? "No unread notifications"
+                          : "No notifications yet"}
                       </div>
                     ) : (
-                      notifications.map((notif) => (
-                        <div
-                          key={notif.id}
-                          onClick={() => handleNotificationClick(notif)}
-                          className={`group flex cursor-pointer items-start gap-2.5 rounded-xl p-2 transition-colors ${
-                            notif.read
-                              ? "hover:bg-[#1b2030] text-gray-400"
-                              : "bg-[#0b0d13] border border-[#f2b705]/20 text-gray-200 hover:border-[#f2b705]/40"
-                          }`}
-                        >
-                          <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[#1b2030] text-[#f2b705]">
-                            <Ticket className="h-3 w-3" />
+                      filteredNotifications.map((notif) => {
+                        const { Icon, badgeColor } = getNotificationIcon(
+                          notif.type,
+                        );
+                        return (
+                          <div
+                            key={notif.id}
+                            className={`group relative flex items-start gap-2.5 rounded-xl p-2.5 transition-all ${
+                              notif.read
+                                ? "hover:bg-[#1b2030] text-gray-400 bg-transparent"
+                                : "bg-[#0b0d13] border border-[#f2b705]/20 text-gray-200 hover:border-[#f2b705]/40"
+                            }`}
+                          >
+                            <div
+                              onClick={() => handleNotificationClick(notif)}
+                              className="flex flex-1 items-start gap-2.5 cursor-pointer min-w-0"
+                            >
+                              <div
+                                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${badgeColor}`}
+                              >
+                                <Icon className="h-3.5 w-3.5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className="text-xs font-semibold text-white group-hover:text-[#f2b705] truncate">
+                                    {notif.title}
+                                  </p>
+                                  {!notif.read && (
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[#f2b705] shrink-0" />
+                                  )}
+                                </div>
+                                <p className="line-clamp-2 text-[11px] text-gray-400 mt-0.5 leading-relaxed">
+                                  {notif.message}
+                                </p>
+                                <p className="text-[9px] text-gray-500 mt-1">
+                                  {formatRelativeTime(notif.timestamp)}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Dismiss single notification button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeNotification(notif.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-gray-300 hover:bg-[#1f2434] rounded transition-all shrink-0 cursor-pointer"
+                              title="Dismiss"
+                              aria-label="Dismiss notification"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-white group-hover:text-[#f2b705] truncate">
-                              {notif.title}
-                            </p>
-                            <p className="line-clamp-2 text-[11px] text-gray-400">
-                              {notif.message}
-                            </p>
-                            <p className="text-[9px] text-gray-500 mt-0.5">
-                              {formatRelativeTime(notif.timestamp)}
-                            </p>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -415,6 +544,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
           })}
         </nav>
       </div>
+
       {/* User Footer with Interactive User Card & Popup */}
       <div
         className="p-3 border-t border-[#232838]/60 relative shrink-0 bg-[#0f121a]"
@@ -455,7 +585,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
 
         {/* User Card Pop-up */}
         {showUserPopup && (
-          <div className="fixed inset-x-4 bottom-5 z-50 max-w-sm mx-auto md:absolute md:inset-auto md:left-full md:bottom-0 md:ml-4 md:w-92 rounded-2xl border border-[#232838] bg-[#121520]/95 backdrop-blur-xl shadow-2xl p-5 animate-in fade-in">
+          <div className="fixed inset-x-4 bottom-5 z-50 max-w-sm mx-auto md:absolute md:inset-auto md:left-full md:bottom-0 md:ml-4 md:w-[360px] rounded-2xl border border-[#232838] bg-[#121520]/95 backdrop-blur-xl shadow-2xl p-5">
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-[#232838]">
               <div className="flex items-center gap-3.5 min-w-0">
@@ -484,7 +614,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                 <button
                   type="button"
                   onClick={() => setIsEditingProfile((prev) => !prev)}
-                  className={`p-2 rounded-xl border transition-all ${
+                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
                     isEditingProfile
                       ? "bg-[#f2b705]/20 text-[#f2b705] border-[#f2b705]/40"
                       : "text-gray-400 hover:text-white hover:bg-[#1a1e2d] border-[#252b3b]"
@@ -499,7 +629,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                     setShowUserPopup(false);
                     setIsEditingProfile(false);
                   }}
-                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-[#1a1e2d] border border-[#252b3b] transition-colors"
+                  className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-[#1a1e2d] border border-[#252b3b] transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -619,7 +749,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                   <button
                     type="button"
                     onClick={handleCopyEmail}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#f2b705] hover:bg-[#1a1e2d] transition-colors shrink-0"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-[#f2b705] hover:bg-[#1a1e2d] transition-colors shrink-0 cursor-pointer"
                     title={copiedEmail ? "Copied!" : "Copy email address"}
                   >
                     {copiedEmail ? (
@@ -651,7 +781,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                     <button
                       type="button"
                       onClick={() => setIsEditingProfile(true)}
-                      className="text-xs text-[#f2b705] hover:underline font-semibold shrink-0"
+                      className="text-xs text-[#f2b705] hover:underline font-semibold shrink-0 cursor-pointer"
                     >
                       + Add
                     </button>
@@ -677,7 +807,6 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
 
             {/* Action Buttons (Change Password & Logout) */}
             <div className="pt-3.5 border-t border-[#232838] space-y-2">
-              {/* Only show Change Password for non-admin accounts */}
               {!isAdmin && (
                 <button
                   type="button"
@@ -705,11 +834,16 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
           </div>
         )}
       </div>
-      <ChangePassword
-        isModal
-        isOpen={showChangePasswordModal}
-        onClose={() => setShowChangePasswordModal(false)}
-      />
+
+      {showChangePasswordModal && (
+        <Suspense fallback={null}>
+          <ChangePassword
+            isModal
+            isOpen={showChangePasswordModal}
+            onClose={() => setShowChangePasswordModal(false)}
+          />
+        </Suspense>
+      )}
     </aside>
   );
 }
