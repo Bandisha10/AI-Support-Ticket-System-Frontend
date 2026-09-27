@@ -1,7 +1,3 @@
-from pydantic import BaseModel, ConfigDict
-from uuid import UUID
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from uuid import UUID
 from datetime import datetime

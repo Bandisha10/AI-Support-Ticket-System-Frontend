@@ -38,113 +38,23 @@ from backend.app.schemas.ticket import (
 )
 from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
 from backend.app.services import ticket_service
+from backend.app.services.storage_service import (
+    ALLOWED_EXTENSIONS,
+    STORAGE_BUCKET,
+    format_size as _format_size,
+    get_signed_url_safe as _get_signed_url_safe,
+    get_ticket_attachments as _get_ticket_attachments,
+    sanitize_filename as _sanitize_filename,
+)
+from backend.app.services.ticket_service import ticket_to_read as _ticket_to_read
+
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 crud = CRUDBase(Ticket)
 analytics_cache = TTLCache(maxsize=100, ttl=60)
-
-STORAGE_BUCKET = getattr(settings, "SUPABASE_STORAGE_BUCKET", "ticket-attachments")
-MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".pdf", ".doc", ".docx", ".txt"}
-
-
-def _format_size(size_bytes: int | None) -> str:
-    if not size_bytes:
-        return "0 Bytes"
-    k = 1024.0
-    sizes = ["Bytes", "KB", "MB", "GB"]
-    i = 0
-    val = float(size_bytes)
-    while val >= k and i < len(sizes) - 1:
-        val /= k
-        i += 1
-    return f"{val:.1f} {sizes[i]}"
-
-
-def _sanitize_filename(filename: str) -> str:
-    base = os.path.basename(filename)
-    return re.sub(r"[^a-zA-Z0-9_.-]", "_", base)
-
-
-async def _get_signed_url_safe(
-    ticket_id: UUID, filename: str, expires_in: int = 3600
-) -> str:
-    """Generate a temporary signed URL from Supabase Storage for secure direct access."""
-    storage_path = f"{ticket_id}/{filename}"
-    try:
-        data = await run_in_threadpool(
-            supabase_admin.storage.from_(STORAGE_BUCKET).create_signed_url,
-            storage_path,
-            expires_in,
-        )
-        return (
-            data.get("signedURL")
-            or data.get("signedUrl")
-            or f"/tickets/{ticket_id}/attachments/{filename}"
-        )
-    except Exception as exc:
-        logger.warning("Could not generate signed URL for %s: %s", storage_path, exc)
-        return f"/tickets/{ticket_id}/attachments/{filename}"
-
-
-async def _get_ticket_attachments(
-    ticket_id: UUID, db: AsyncSession
-) -> list[AttachmentRead]:
-    attachments: list[AttachmentRead] = []
-    try:
-        result = await db.execute(
-            select(Attachment).where(Attachment.ticket_id == ticket_id)
-        )
-        rows = result.scalars().all()
-        for r in rows:
-            formatted_sz = _format_size(r.file_size)
-            signed_url = await _get_signed_url_safe(ticket_id, r.filename)
-            attachments.append(
-                AttachmentRead(
-                    id=r.id,
-                    ticket_id=r.ticket_id,
-                    filename=r.filename,
-                    name=r.original_filename,
-                    url=signed_url,
-                    content_type=r.content_type,
-                    size=formatted_sz,
-                    file_size=r.file_size,
-                    size_formatted=formatted_sz,
-                    created_at=r.created_at,
-                )
-            )
-    except Exception as exc:
-        logger.error("Failed to query attachments for ticket %s: %s", ticket_id, exc)
-
-    return attachments
-
-
-def _ticket_to_read(
-    ticket: Ticket,
-    customer_email: str | None,
-    sla_due_at=None,
-    attachments: list[AttachmentRead] | None = None,
-) -> TicketRead:
-    """Build a TicketRead-compatible object from a Ticket ORM object + joined fields."""
-    return TicketRead(
-        id=ticket.id,
-        customer_id=ticket.customer_id,
-        customer_email=customer_email,
-        department_id=ticket.department_id,
-        assigned_agent_id=ticket.assigned_agent_id,
-        priority=ticket.priority,
-        sentiment=ticket.sentiment,
-        status=ticket.status,
-        subject=ticket.subject,
-        body_redacted=ticket.body_redacted,
-        classification_confidence=ticket.classification_confidence,
-        sla_due_at=sla_due_at,
-        attachments=attachments or [],
-        created_at=ticket.created_at,
-        updated_at=ticket.updated_at,
-    )
 
 
 @router.post("/", response_model=TicketRead, status_code=201)
