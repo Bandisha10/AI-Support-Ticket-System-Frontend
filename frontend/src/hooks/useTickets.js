@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery} from "@tanstack/react-query";
 import * as ticketService from "../services/ticketService";
 
 // Cached ticket-list hook with background revalidation.

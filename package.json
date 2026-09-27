@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext js,jsx",
-    "tunnel": "npx localtunnel --port 8001 --subdomain deskwise-ai"
+    "lint": "eslint frontend/src --ext js,jsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
+from sqlalchemy import select, func as sa_func
 
 from backend.app.core import mailer
 from backend.app.core.roles import is_company_domain
@@ -15,13 +15,10 @@ from backend.app.crud.base import CRUDBase
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.department import Department
-from backend.app.models.enums import AgentTier, UserRole
-from backend.app.models.user import User
-from backend.app.schemas.user import AgentInvite, AgentInviteResponse, UserRead, UserUpdate
-from backend.app.schemas.user import AgentAvailabilityUpdate
-from sqlalchemy import select, func as sa_func
 from backend.app.models.ticket import Ticket
+from backend.app.models.user import User
 from backend.app.models.enums import AgentTier, UserRole, TicketStatus
+from backend.app.services import user_service
 from backend.app.schemas.user import (
     AgentInvite,
     AgentInviteResponse,

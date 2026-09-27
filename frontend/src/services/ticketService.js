@@ -144,12 +144,6 @@ export async function rateTicket(ticketId, ratingData) {
 
 // --- Canned Replies ---
 export async function getCannedReplies() {
-  try {
-    const { data } = await api.get("/agents/canned-replies");
-    if (Array.isArray(data) && data.length > 0) return data;
-  } catch {
-    // Fall back to hardcoded templates if backend endpoint is unconfigured
-  }
   const { CANNED_REPLIES } = await import("../utils/cannedReplies");
   return CANNED_REPLIES;
 }
