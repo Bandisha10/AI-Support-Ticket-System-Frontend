@@ -24,3 +24,4 @@ backend/app/ai/model_artifacts/
 *.safetensors
 index.py
 .vercel
+onnx_exports/
