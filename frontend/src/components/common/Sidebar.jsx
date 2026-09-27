@@ -468,9 +468,14 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                   <h4 className="text-sm font-semibold text-white truncate capitalize leading-snug">
                     {displayName}
                   </h4>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">
-                    {roleConfig.label}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${roleConfig.badgeClass}`}
+                    >
+                      <roleConfig.Icon className="h-3 w-3" />
+                      {roleConfig.label}
+                    </span>
+                  </div>
                 </div>
               </div>
 

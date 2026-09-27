@@ -26,7 +26,6 @@ from backend.app.services.sla_service import sla_monitor_worker
 
 init_sentry()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Preload AI models on server startup
@@ -42,12 +41,10 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
-
 app = FastAPI(title="Deskwise", version="1.0.0", lifespan=lifespan)
 
 # Register limiter on app state and handle 429 exceptions
 app.state.limiter = limiter
-
 
 # Lines 35–60 in backend/app/main.py:
 @app.exception_handler(RateLimitExceeded)
@@ -75,7 +72,6 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
             "X-RateLimit-Reset": str(int(time.time()) + retry_after),
         },
     )
-
 
 class ForceHTTPSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -137,8 +133,6 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-
-
 app.include_router(auth.router)
 app.include_router(departments.router)
 app.include_router(users.router)
@@ -146,7 +140,12 @@ app.include_router(tickets.router)
 app.include_router(sla_policies.router)
 app.include_router(replies.router)
 
-
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok"}
+
+@app.get("/sentry-debug", tags=["Health"])
+async def trigger_sentry_test():
+    """Test endpoint: deliberate error to verify Sentry receives production events."""
+    division_by_zero = 1 / 0
+    return {"result": division_by_zero}

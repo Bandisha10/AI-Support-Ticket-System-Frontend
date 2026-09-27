@@ -13,7 +13,6 @@ export default function MyTickets() {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -39,19 +38,14 @@ export default function MyTickets() {
         statusFilter === "all" ||
         t.status?.toLowerCase() === statusFilter.toLowerCase();
 
-      const matchPriority =
-        priorityFilter === "all" ||
-        t.priority?.toLowerCase() === priorityFilter.toLowerCase();
-
-      return matchSearch && matchStatus && matchPriority;
+      return matchSearch && matchStatus;
     });
-  }, [tickets, debouncedSearch, statusFilter, priorityFilter]);
+  }, [tickets, debouncedSearch, statusFilter]);
 
   if (loading) return <Loader fullScreen />;
 
   return (
     <div className="min-h-screen w-full bg-[#0a0c10] max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-      {/* Header & New Ticket / FAQ Buttons */}
       {/* Header & New Ticket / FAQ Buttons */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -106,7 +100,7 @@ export default function MyTickets() {
       <div className="mb-6 rounded-xl border border-surface-border bg-surface-card p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
           {/* Search Box */}
-          <div className="relative sm:col-span-6">
+          <div className="relative sm:col-span-8">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
@@ -118,7 +112,7 @@ export default function MyTickets() {
           </div>
 
           {/* Status Filter */}
-          <div className="relative sm:col-span-3">
+          <div className="relative sm:col-span-4">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -133,27 +127,10 @@ export default function MyTickets() {
             </select>
             <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           </div>
-
-          {/* Priority Filter */}
-          <div className="relative sm:col-span-3">
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-sm text-gray-200 focus:border-accent focus:outline-none"
-            >
-              <option value="all">All Priorities</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-            <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
-          </div>
         </div>
 
         {/* Active Filter Counts */}
-        {(debouncedSearch ||
-          statusFilter !== "all" ||
-          priorityFilter !== "all") && (
+        {(debouncedSearch || statusFilter !== "all") && (
           <div className="mt-3 flex items-center justify-between border-t border-surface-border/60 pt-2 text-xs text-gray-400">
             <span>
               Showing {filteredTickets.length} of {tickets.length} tickets
@@ -162,9 +139,8 @@ export default function MyTickets() {
               onClick={() => {
                 setSearchTerm("");
                 setStatusFilter("all");
-                setPriorityFilter("all");
               }}
-              className="text-accent hover:underline"
+              className="text-accent hover:underline cursor-pointer"
             >
               Reset filters
             </button>
