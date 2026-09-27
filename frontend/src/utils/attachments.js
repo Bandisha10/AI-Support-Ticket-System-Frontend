@@ -52,11 +52,12 @@ export function validateAttachmentFile(file) {
   const ext = name.includes(".")
     ? name.substring(name.lastIndexOf(".")).toLowerCase()
     : "";
-  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+   if (!ALLOWED_EXTENSIONS.includes(ext)) {
     return {
       valid: false,
-      error: `File "${file.name}" has an unsupported format. Allowed: PNG, JPG, JPEG, GIF, WEBP, PDF, DOC, DOCX, TXT.`,
+      error: `File "${file.name}" has an unsupported format. Allowed: PNG, JPG, JPEG, WEBP, PDF, DOC, DOCX, TXT.`,
     };
   }
   return { valid: true };
+
 }
