@@ -1,14 +1,16 @@
 """
-One-time script to:
-1. Download your 3 fine-tuned DistilBERT models.
-2. Export and quantize them to INT8 ONNX (shrinking from 268 MB to ~64 MB each).
-3. Upload `model_quantized.onnx` directly into your existing Hugging Face model repositories.
+One-time developer script to:
+1. Download 3 fine-tuned DistilBERT models from Hugging Face.
+2. Export them to ONNX graphs with dynamic batch & sequence axes.
+3. Quantize the exported ONNX models to INT8 (shrinking weights from ~268 MB to ~64 MB).
+4. Upload `model_quantized.onnx` directly back into the Hugging Face repositories for fast,
+   low-memory CPU inference in production.
 """
 import os
 import warnings
 from pathlib import Path
 
-# Suppress harmless tracer warnings during export
+# Suppress harmless tracer warnings during TorchScript/ONNX export
 warnings.filterwarnings("ignore")
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
@@ -18,20 +20,24 @@ from huggingface_hub import HfApi
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+# Load local environment variables (.env) to retrieve Hugging Face credentials
 load_dotenv()
 
+# Write-enabled Hugging Face access token required for uploading assets
 HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN:
     raise ValueError("HF_TOKEN not found in .env. Please provide a write-enabled HF token.")
 
 api = HfApi(token=HF_TOKEN)
 
+# List of Hugging Face repositories for the classification tasks
 MODELS = [
     "pratik14212/deskwise-departments",
     "pratik14212/deskwise-priorities",
     "pratik14212/deskwise-sentiments",
 ]
 
+# Staging directory for local conversion artifacts
 output_dir = Path("./onnx_exports")
 output_dir.mkdir(exist_ok=True)
 
@@ -41,7 +47,9 @@ for repo_id in MODELS:
     print(f"Processing: {repo_id}")
     print(f"==========================================")
 
+    # ---------------------------------------------------------
     # 1. Load PyTorch model & tokenizer
+    # ---------------------------------------------------------
     print("1. Loading PyTorch model from Hugging Face...")
     tokenizer = AutoTokenizer.from_pretrained(repo_id, token=HF_TOKEN)
     model = AutoModelForSequenceClassification.from_pretrained(repo_id, token=HF_TOKEN)
@@ -50,8 +58,11 @@ for repo_id in MODELS:
     raw_onnx_path = output_dir / f"{model_name}.onnx"
     quantized_onnx_path = output_dir / f"{model_name}_quantized.onnx"
 
+    # ---------------------------------------------------------
     # 2. Export to standard ONNX (using stable TorchScript engine)
+    # ---------------------------------------------------------
     print("2. Exporting to ONNX...")
+    # Generate a dummy input tensor for graph tracing
     dummy_input = tokenizer("Sample ticket text for tracing", return_tensors="pt")
 
     torch.onnx.export(
@@ -60,6 +71,7 @@ for repo_id in MODELS:
         str(raw_onnx_path),
         input_names=["input_ids", "attention_mask"],
         output_names=["logits"],
+        # Enable dynamic dimensions so inference can process variable batch sizes and text lengths
         dynamic_axes={
             "input_ids": {0: "batch", 1: "seq"},
             "attention_mask": {0: "batch", 1: "seq"},
@@ -70,7 +82,9 @@ for repo_id in MODELS:
         dynamo=False,
     )
 
-    # 3. Quantize to INT8 (Shrinks from 268 MB -> ~64 MB)
+    # ---------------------------------------------------------
+    # 3. Quantize to INT8 (Shrinks model from 268 MB -> ~64 MB)
+    # ---------------------------------------------------------
     print("3. Quantizing to INT8 (reducing memory footprint by 75%)...")
     quantize_dynamic(
         model_input=str(raw_onnx_path),
@@ -81,7 +95,9 @@ for repo_id in MODELS:
     size_mb = quantized_onnx_path.stat().st_size / (1024 * 1024)
     print(f"   -> Quantized file size: {size_mb:.2f} MB")
 
-    # 4. Upload directly to your Hugging Face repository
+    # ---------------------------------------------------------
+    # 4. Upload directly to Hugging Face repository
+    # ---------------------------------------------------------
     print(f"4. Uploading 'model_quantized.onnx' to {repo_id}...")
     api.upload_file(
         path_or_fileobj=str(quantized_onnx_path),
@@ -91,13 +107,13 @@ for repo_id in MODELS:
     )
     print(f"   -> Successfully uploaded to Hugging Face: {repo_id}!")
 
-    # Clean up local temporary files
+    # Clean up intermediate files on disk to free up workspace space
     if raw_onnx_path.exists():
         raw_onnx_path.unlink()
     if quantized_onnx_path.exists():
         quantized_onnx_path.unlink()
 
-# Remove temporary directory
+# Clean up empty staging folder
 if output_dir.exists():
     try:
         output_dir.rmdir()

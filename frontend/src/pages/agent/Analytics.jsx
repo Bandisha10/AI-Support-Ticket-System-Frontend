@@ -33,15 +33,28 @@ export default function AgentAnalytics() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dateRange, setDateRange] = useState("custom");
-  const [startDate, setStartDate] = useState(() => {
+  const [dateRange, setDateRange] = useState("week");
+
+  // Local calendar date helper (YYYY-MM-DD)
+  const getLocalDateString = (d = new Date()) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const today = getLocalDateString(new Date());
+
+  // Default custom range: 7 days ago to today (now to past dates only)
+  const defaultStartDate = (() => {
     const d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().split("T")[0];
-  });
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split("T")[0];
-  });
+    d.setDate(d.getDate() - 7);
+    return getLocalDateString(d);
+  })();
+
+  const [startDate, setStartDate] = useState(defaultStartDate);
+  const [endDate, setEndDate] = useState(today);
+  const maxFromDate = endDate && endDate < today ? endDate : today;
 
   useEffect(() => {
     loadAnalytics(true);
@@ -97,7 +110,8 @@ export default function AgentAnalytics() {
       csv += `Active Tickets,${data.active_count || 0}\n`;
       csv += `Resolved Tickets,${data.resolved_count || 0}\n`;
       csv += `Closed Tickets,${data.closed_count || 0}\n`;
-      csv += `Resolution Rate,${data.resolution_rate || 0}%\n`;
+      csv += `Resolution Rate,${resolutionRate}%\n`;
+      csv += `Average Response Time,${data.avg_response_label || "N/A"}\n`;
       csv += `CSAT Rating,${data.sla_compliance?.csat ? `${data.sla_compliance.csat}/5` : "No ratings"}\n\n`;
 
       csv += "TICKETS BY STATUS\n";
@@ -194,6 +208,15 @@ export default function AgentAnalytics() {
 
   const csat = data.sla_compliance?.csat;
 
+  const resolvedAndClosed =
+    (data?.resolved_count || 0) + (data?.closed_count || 0);
+  const resolutionRate =
+    data?.resolution_rate !== undefined && data?.resolution_rate !== null
+      ? data.resolution_rate
+      : data?.total_tickets > 0
+        ? ((resolvedAndClosed / data.total_tickets) * 100).toFixed(1)
+        : "0.0";
+
   return (
     <div className="min-h-screen bg-[#0a0c10] text-white p-4 sm:p-6 lg:p-8">
       {/* Manager View Switcher */}
@@ -287,8 +310,17 @@ export default function AgentAnalytics() {
                   <Calendar className="h-3.5 w-3.5 text-[#f2b705] shrink-0" />
                   <input
                     type="date"
+                    max={maxFromDate}
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setStartDate("");
+                        return;
+                      }
+                      const safeVal = val > maxFromDate ? maxFromDate : val;
+                      setStartDate(safeVal);
+                    }}
                     className="bg-transparent text-xs text-white border-0 focus:outline-none [color-scheme:dark] cursor-pointer w-[110px] sm:w-auto"
                     title="Start Date"
                   />
@@ -297,7 +329,20 @@ export default function AgentAnalytics() {
                 <input
                   type="date"
                   value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate || undefined}
+                  max={today}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) {
+                      setEndDate("");
+                      return;
+                    }
+                    const safeVal = val > today ? today : val;
+                    setEndDate(safeVal);
+                    if (startDate && safeVal < startDate) {
+                      setStartDate(safeVal);
+                    }
+                  }}
                   className="bg-transparent text-xs text-white border-0 focus:outline-none [color-scheme:dark] cursor-pointer w-[110px] sm:w-auto"
                   title="End Date"
                 />
@@ -336,31 +381,30 @@ export default function AgentAnalytics() {
         <div className="bg-[#181b26] border border-[#232632] rounded-[16px] p-5">
           <div className="flex items-center justify-between text-[#9ca3af]">
             <p className="text-[11px] font-semibold tracking-wider uppercase">
-              Resolution Rate
+              Average Response
             </p>
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <Clock className="h-4 w-4 text-blue-400" />
           </div>
-          <h2 className="text-[28px] font-bold mt-2 text-emerald-400">
-            {data.resolution_rate}%
+          <h2 className="text-[28px] font-bold mt-2 text-blue-400">
+            {data.avg_response_label || "N/A"}
           </h2>
           <p className="text-[11px] text-gray-400 mt-1">
-            {(data.resolved_count || 0) + (data.closed_count || 0)}{" "}
-            resolved/closed
+            First response time average
           </p>
         </div>
 
         <div className="bg-[#181b26] border border-[#232632] rounded-[16px] p-5">
           <div className="flex items-center justify-between text-[#9ca3af]">
             <p className="text-[11px] font-semibold tracking-wider uppercase">
-              Average Response
+              Resolution Rate
             </p>
-            <Clock className="h-4 w-4 text-blue-400" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           </div>
-          <h2 className="text-[28px] font-bold mt-2 text-blue-400">
-            {data.avg_response_label || "45m"}
+          <h2 className="text-[28px] font-bold mt-2 text-emerald-400">
+            {resolutionRate}%
           </h2>
           <p className="text-[11px] text-gray-400 mt-1">
-            First response SLA target
+            {resolvedAndClosed} resolved or closed
           </p>
         </div>
 
@@ -441,41 +485,48 @@ export default function AgentAnalytics() {
           <h3 className="text-sm font-semibold mb-4 text-gray-200">
             Tickets by Priority
           </h3>
-          <div className="space-y-4 py-2">
-            {(data.tickets_by_priority || []).map((p) => {
-              const pct =
-                data.total_tickets > 0
-                  ? ((p.count / data.total_tickets) * 100).toFixed(1)
-                  : "0.0";
-              const barColor =
-                p.name === "urgent"
-                  ? "bg-red-500"
-                  : p.name === "high"
-                    ? "bg-amber-500"
-                    : p.name === "medium"
-                      ? "bg-blue-500"
-                      : "bg-gray-500";
+          {!data.tickets_by_priority?.length ||
+          data.tickets_by_priority.every((p) => p.count === 0) ? (
+            <div className="py-12 text-center text-xs text-gray-500">
+              No priority data recorded for this timeframe
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              {(data.tickets_by_priority || []).map((p) => {
+                const pct =
+                  data.total_tickets > 0
+                    ? ((p.count / data.total_tickets) * 100).toFixed(1)
+                    : "0.0";
+                const barColor =
+                  p.name === "urgent"
+                    ? "bg-red-500"
+                    : p.name === "high"
+                      ? "bg-amber-500"
+                      : p.name === "medium"
+                        ? "bg-blue-500"
+                        : "bg-gray-500";
 
-              return (
-                <div key={p.name} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="capitalize text-gray-300 font-medium">
-                      {p.name}
-                    </span>
-                    <span className="text-gray-400">
-                      {p.count} ({pct}%)
-                    </span>
+                return (
+                  <div key={p.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="capitalize text-gray-300 font-medium">
+                        {p.name}
+                      </span>
+                      <span className="text-gray-400">
+                        {p.count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-[#10121a] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${barColor} transition-all duration-500`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-[#10121a] overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${barColor} transition-all duration-500`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Tickets by Department */}
@@ -575,81 +626,6 @@ export default function AgentAnalytics() {
           </div>
         )}
       </div>
-      {/* Department Team Performance Table (Manager Only) */}
-      {viewMode === "department" && (
-        <div className="mt-8 rounded-2xl border border-[#232632] bg-[#141824] p-6 shadow-xl">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-[#fbbf24]" />
-              <h3 className="font-semibold text-[15px] text-white">
-                Team Members Performance
-              </h3>
-            </div>
-            <span className="text-xs text-gray-400">
-              {data.agent_performance?.length || 0} agents active
-            </span>
-          </div>
-
-          {!data.agent_performance || data.agent_performance.length === 0 ? (
-            <p className="py-6 text-center text-xs text-gray-500">
-              No performance activity recorded for this date range.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-[#232632] text-gray-400">
-                    <th className="pb-3 font-medium">Agent</th>
-                    <th className="pb-3 font-medium text-center">
-                      Unresolved Tickets
-                    </th>
-                    <th className="pb-3 font-medium text-center">
-                      Resolved / Closed
-                    </th>
-                    <th className="pb-3 font-medium text-center">
-                      Customer Rating
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#232632]">
-                  {data.agent_performance.map((agent) => (
-                    <tr
-                      key={agent.id}
-                      className="hover:bg-white/[0.02] transition-colors"
-                    >
-                      <td className="py-3 font-medium text-gray-200">
-                        {agent.name}
-                        <span className="block text-[11px] text-gray-500 font-normal">
-                          {agent.email}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className="rounded-full bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 text-[11px] font-semibold text-yellow-400">
-                          {agent.unresolved_count}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center">
-                        <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
-                          {agent.closed_count}
-                        </span>
-                      </td>
-                      <td className="py-3 text-center font-semibold text-gray-300">
-                        {agent.rating ? (
-                          <span className="inline-flex items-center gap-1 text-[#fbbf24]">
-                            ★ {agent.rating}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500">N/A</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

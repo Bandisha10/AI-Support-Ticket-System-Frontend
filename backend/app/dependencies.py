@@ -1,3 +1,8 @@
+"""
+Authentication & Authorization Dependencies.
+Handles bearer token extraction, Supabase JWT decoding, JIT user provisioning,
+temporary password lockout enforcement, and role-based access control (RBAC).
+"""
 import logging
 from uuid import UUID
 
@@ -21,14 +26,15 @@ from backend.app.models.enums import UserRole
 from backend.app.models.user import User
 
 logger = logging.getLogger(__name__)
+
+# FastAPI Bearer scheme configuration (auto_error=False allows custom error messaging)
 bearer_scheme = HTTPBearer(
     auto_error=False,
     scheme_name="SupabaseAccessToken",
     description="Supabase access_token from POST /auth/login or /auth/refresh.",
 )
 
-# Endpoints an agent on a temporary password may still reach, so the forced
-# password change cannot lock them out of fixing it.
+# Endpoints accessible to users with temporary passwords so they can update credentials
 PASSWORD_CHANGE_EXEMPT_PATHS = {
     "/auth/change-password",
     "/auth/forgot-password",
@@ -42,16 +48,19 @@ PASSWORD_CHANGE_EXEMPT_PATHS = {
 
 
 def _www_authenticate() -> dict[str, str]:
+    """Returns the standard WWW-Authenticate challenge header."""
     return {"WWW-Authenticate": "Bearer"}
 
 
 def _unauthorized(detail: str) -> HTTPException:
+    """Helper to construct an HTTP 401 Unauthorized exception with proper challenge headers."""
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED, detail, headers=_www_authenticate()
     )
 
 
 def _redact(value: str, keep: int = 16) -> str:
+    """Safely redacts long input values for safe error messages without leaking tokens."""
     if len(value) <= keep:
         return value
     return f"{value[:keep]}... ({len(value)} chars)"
@@ -61,6 +70,10 @@ async def get_access_token(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> str:
+    """
+    Extracts and sanitizes the Bearer token from the HTTP Authorization header.
+    Provides informative diagnostics for missing, malformed, or unresolved template tokens.
+    """
     if credentials is None:
         raw = request.headers.get("Authorization")
         if not raw or not raw.strip():
@@ -90,6 +103,7 @@ async def get_access_token(
             "Bearer token is empty. If you are using a template variable, it resolved "
             "to an empty string."
         )
+    # Guard against accidental quotes or unresolved client environment variables
     if token[0] in "\"'" or token.startswith("{{"):
         raise _unauthorized(
             "Bearer token is not a JWT - it still contains quotes or an unresolved "
@@ -99,6 +113,10 @@ async def get_access_token(
 
 
 async def get_token_claims(token: str = Depends(get_access_token)) -> dict:
+    """
+    Verifies the JWT signature and decodes claims using the Supabase JWT secret.
+    Translates security exceptions into structured HTTP 401 responses.
+    """
     try:
         return decode_supabase_jwt(token)
     except TokenExpiredError:
@@ -124,16 +142,22 @@ async def get_current_user(
     claims: dict = Depends(get_token_claims),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    """
+    Resolves the authenticated User from the database using the token subject UUID.
+    Performs Just-In-Time (JIT) provisioning for OAuth users, validates account status,
+    enforces temporary password constraints, and attaches telemetry metadata to Sentry.
+    """
     try:
         user_id = UUID(str(claims["sub"]))
     except (ValueError, TypeError, KeyError):
         raise _unauthorized("Token 'sub' claim is not a valid UUID.") from None
 
+    # Fetch user record from local PostgreSQL database
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
-    # JIT (just-in-time) provisioning for OAuth users (e.g. Google sign-in).
-    # Supabase creates auth.users but nothing creates public.users for OAuth.
+    # JIT (Just-In-Time) provisioning for OAuth users (e.g. Google Sign-In)
+    # Supabase creates auth.users rows, but public.users must be provisioned locally.
     if not user:
         email = claims.get("email")
         if not email:
@@ -141,11 +165,11 @@ async def get_current_user(
                 status.HTTP_404_NOT_FOUND,
                 "User profile not found and token has no email claim.",
             )
-        # Block company-domain users from self-provisioning via OAuth
+        # Block internal company-domain users from self-provisioning via public OAuth
         from backend.app.core.roles import is_company_domain
 
         if is_company_domain(email):
-            # Delete the orphaned auth record in Supabase so an admin can invite them later
+            # Clean up uninvited OAuth record from Supabase auth to allow future admin invitation
             try:
                 await run_in_threadpool(
                     supabase_admin.auth.admin.delete_user, str(user_id)
@@ -160,6 +184,8 @@ async def get_current_user(
                 status.HTTP_403_FORBIDDEN,
                 "Agent accounts must be created by an administrator. Please ask your admin for an invite.",
             )
+
+        # Create new customer record in public.users
         user = User(
             id=user_id,
             email=email,
@@ -176,7 +202,7 @@ async def get_current_user(
             await db.refresh(user)
         except Exception:
             await db.rollback()
-            # Race condition: another request may have created the row
+            # Handle concurrent registration race condition: re-check row
             result = await db.execute(select(User).where(User.id == user_id))
             user = result.scalar_one_or_none()
             if not user:
@@ -185,6 +211,7 @@ async def get_current_user(
                     "Failed to create user profile.",
                 )
 
+    # Verify user account state
     if getattr(user, "is_archive", False):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "This account has been closed or archived."
@@ -195,8 +222,7 @@ async def get_current_user(
             status.HTTP_403_FORBIDDEN, "This account has been temporarily deactivated."
         )
 
-    # Invited agents are still on the admin-generated temporary password: block
-    # everything except the endpoints needed to replace it.
+    # Enforce temporary password change for newly invited staff/agents
     if (
         settings.ENFORCE_PASSWORD_CHANGE
         and getattr(user, "must_change_password", False)
@@ -207,7 +233,7 @@ async def get_current_user(
             "Password change required. Call POST /auth/change-password first.",
         )
 
-    # Tag Sentry events with who made the request (id only — no PII by default).
+    # Attach user context to Sentry trace (safe identifier only, omitting PII)
     sentry_sdk.set_user({"id": str(user.id)})
     sentry_sdk.set_tag("user.role", user.role.value)
 
@@ -215,6 +241,11 @@ async def get_current_user(
 
 
 def require_role(*roles: UserRole):
+    """
+    Higher-order dependency generator for Role-Based Access Control (RBAC).
+    Usage:
+        @router.get("/admin-only", dependencies=[Depends(require_role(UserRole.admin))])
+    """
     async def checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
