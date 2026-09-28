@@ -37,6 +37,16 @@ logger = logging.getLogger(__name__)
 ticket_crud = CRUDBase(Ticket)
 
 
+def _val(x) -> str:
+    """Return the string value of an enum (or str) safely."""
+    return x.value if hasattr(x, "value") else str(x)
+
+
+def _is_high_risk(priority, sentiment) -> bool:
+    """A ticket is high-risk only when it is BOTH high priority AND negative sentiment."""
+    return priority == TicketPriority.high and sentiment == TicketSentiment.negative
+
+
 def ticket_to_read(
     ticket: Ticket,
     customer_email: str | None,
@@ -133,9 +143,7 @@ async def create_ticket_workflow(
     # 4. Check for Manager Auto-Escalation
     assigned_mgr_id = None
     mgr_routed = False
-    is_escalation = (
-        priority_val == TicketPriority.high or sentiment_val == TicketSentiment.negative
-    )
+    is_escalation = _is_high_risk(priority_val, sentiment_val)
 
     manager = None
     if is_escalation and department_row:
@@ -188,16 +196,20 @@ async def create_ticket_workflow(
             )
         )
         await db.commit()
-        await run_in_threadpool(
-            mailer.send_manager_ticket_escalation_email,
-            manager_email=manager.email,
-            manager_name=manager.first_name,
-            ticket_id=str(ticket.id),
-            ticket_subject=ticket.subject,
-            reason="High Priority or Negative Sentiment ticket auto-escalation",
-            priority=priority_val.value,
-            sentiment=sentiment_val.value,
-        )
+        # The ticket is already saved; a mail failure must not turn into a 500.
+        try:
+            await run_in_threadpool(
+                mailer.send_manager_ticket_escalation_email,
+                manager_email=manager.email,
+                manager_name=manager.first_name,
+                ticket_id=str(ticket.id),
+                ticket_subject=ticket.subject,
+                reason="High Priority and Negative Sentiment ticket auto-escalation",
+                priority=priority_val.value,
+                sentiment=sentiment_val.value,
+            )
+        except Exception as exc:
+            logger.warning("Failed to send manager escalation email: %s", exc)
 
     return ticket_to_read(ticket, current_user.email, attachments=[])
 
@@ -266,11 +278,8 @@ async def update_ticket_workflow(
             raise HTTPException(
                 400, "Cannot assign ticket to an agent outside of this department"
             )
-        # 3. Prevent Regular Agents from Claiming High-Risk Escalations
-        is_high_risk = (
-            obj.priority == TicketPriority.high
-            or obj.sentiment == TicketSentiment.negative
-        )
+        # Prevent Regular Agents from Claiming High-Risk Escalations
+        is_high_risk = _is_high_risk(obj.priority, obj.sentiment)
         if (
             is_high_risk
             and not is_admin
@@ -284,15 +293,11 @@ async def update_ticket_workflow(
                     f"High-priority and negative-sentiment tickets are reserved for Department Manager ({dept_manager.email}) or Admins.",
                 )
 
-    # 3. Check for Mid-Lifecycle Escalation
+    # 4. Check for Mid-Lifecycle Escalation
     new_priority = payload.priority or obj.priority
     new_sentiment = payload.sentiment or obj.sentiment
-    was_high_risk = (
-        obj.priority == TicketPriority.high or obj.sentiment == TicketSentiment.negative
-    )
-    is_now_high_risk = (
-        new_priority == TicketPriority.high or new_sentiment == TicketSentiment.negative
-    )
+    was_high_risk = _is_high_risk(obj.priority, obj.sentiment)
+    is_now_high_risk = _is_high_risk(new_priority, new_sentiment)
 
     updates = payload.model_dump(exclude_unset=True)
 
@@ -306,7 +311,7 @@ async def update_ticket_workflow(
         if payload.status is None:
             updates["status"] = TicketStatus.open
 
-    # 3: Auto-advance ticket status to in_progress if open and assigned
+    # Auto-advance ticket status to in_progress if open and assigned
     if (
         updates.get("assigned_agent_id")
         and (payload.status is None)
@@ -314,7 +319,7 @@ async def update_ticket_workflow(
     ):
         updates["status"] = TicketStatus.in_progress
 
-    # 3: Create an internal audit note when delegated to another agent
+    # Create an internal audit note when delegated to another agent
     if (
         updates.get("assigned_agent_id")
         and updates["assigned_agent_id"] != obj.assigned_agent_id
@@ -339,7 +344,7 @@ async def update_ticket_workflow(
                     is_internal_note=True,
                 )
             )
-            # #2: Send email notification to the delegated agent
+            # Send email notification to the delegated agent
             dept_name = "General Support"
             if obj.department_id:
                 dept_obj = await db.get(Department, obj.department_id)
@@ -359,43 +364,45 @@ async def update_ticket_workflow(
                     ticket_subject=obj.subject,
                     department_name=dept_name,
                     delegated_by_name=f"{delegator_label} ({actor_role})",
-                    priority=new_priority.value
-                    if hasattr(new_priority, "value")
-                    else str(new_priority),
+                    priority=_val(new_priority),
                 )
             except Exception as exc:
                 logger.warning("Failed to send agent ticket delegated email: %s", exc)
 
+    # 5. Route high-risk tickets to the Department Manager
     target_dept_id = updates.get("department_id", obj.department_id)
     dept_just_assigned_or_changed = (
         "department_id" in updates
         and updates["department_id"] is not None
         and updates["department_id"] != obj.department_id
     )
-    # Route to manager if:
-    # 1. Mid-flight risk escalation (priority/sentiment escalated from normal)
-    # 2. Triage / Department Assignment: high-risk ticket newly assigned a department without an explicit agent assigned
+    newly_high_risk = is_now_high_risk and not was_high_risk
+
+    # If the caller explicitly picked an assignee (e.g. an admin delegating), respect it.
+    explicit_assignee = updates.get("assigned_agent_id") is not None
+
+    # Escalate when:
+    #  1. priority/sentiment just became high-risk (mid-lifecycle), or
+    #  2. a high-risk ticket was just given/moved to a department (triage / transfer)
     should_escalate_to_manager = (
         is_now_high_risk
-        and target_dept_id
-        and (
-            (not was_high_risk and is_now_high_risk)
-            or (
-                dept_just_assigned_or_changed
-                and "assigned_agent_id" not in payload.model_fields_set
-            )
-        )
+        and bool(target_dept_id)
+        and not explicit_assignee
+        and (newly_high_risk or dept_just_assigned_or_changed)
     )
+
+    manager_email_payload = None
     if should_escalate_to_manager:
         manager = await get_active_department_manager(db, target_dept_id)
-        if manager and updates.get("assigned_agent_id") != manager.id:
+        # Skip if the ticket is already with the manager (avoids duplicate notes/emails)
+        if manager and obj.assigned_agent_id != manager.id:
             updates["assigned_agent_id"] = manager.id
             if payload.status is None and obj.status == TicketStatus.open:
                 updates["status"] = TicketStatus.in_progress
             reason = (
-                "Triage Escalation: High-priority/negative-sentiment ticket assigned to department"
-                if dept_just_assigned_or_changed and was_high_risk
-                else "Mid-ticket escalation to High Priority or Negative Sentiment"
+                "Mid-ticket escalation to High Priority and Negative Sentiment"
+                if newly_high_risk
+                else "Triage Escalation: High-priority/negative-sentiment ticket assigned to department"
             )
             db.add(
                 Reply(
@@ -405,18 +412,27 @@ async def update_ticket_workflow(
                     is_internal_note=True,
                 )
             )
-            await run_in_threadpool(
-                mailer.send_manager_ticket_escalation_email,
+            manager_email_payload = dict(
                 manager_email=manager.email,
                 manager_name=manager.first_name,
                 ticket_id=str(obj.id),
                 ticket_subject=obj.subject,
                 reason=reason,
-                priority=new_priority.value,
-                sentiment=new_sentiment.value,
+                priority=_val(new_priority),
+                sentiment=_val(new_sentiment),
             )
 
     updated = await ticket_crud.update(db, obj, updates)
+
+    # Send the manager alert only after the change is saved, and never fail the request over it
+    if manager_email_payload:
+        try:
+            await run_in_threadpool(
+                mailer.send_manager_ticket_escalation_email,
+                **manager_email_payload,
+            )
+        except Exception as exc:
+            logger.warning("Failed to send manager escalation email: %s", exc)
 
     # Fetch joined SLA state for response
     query = (
