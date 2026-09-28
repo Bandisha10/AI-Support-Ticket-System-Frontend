@@ -38,6 +38,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "./Toast";
 import * as authService from "../../services/authService";
 const ChangePassword = lazy(() => import("../../pages/ChangePassword"));
+import Logo from "./Logo";
 
 export default function Sidebar({ isOpen = false, onClose = () => {} }) {
   const navigate = useNavigate();
@@ -300,48 +301,9 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
             className="flex items-center gap-3 hover:opacity-90 transition-opacity cursor-pointer"
           >
             <div className="w-9 h-9 bg-[#12131a] rounded-xl flex items-center justify-center">
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <path
-                  d="M6 18 C6 8 10 3 18 3 C26 3 30 8 30 18"
-                  stroke="white"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                />
-                <rect
-                  x="4"
-                  y="15"
-                  width="10"
-                  height="14"
-                  rx="5"
-                  stroke="white"
-                  strokeWidth="2.5"
-                />
-                <rect
-                  x="22"
-                  y="15"
-                  width="10"
-                  height="14"
-                  rx="5"
-                  stroke="white"
-                  strokeWidth="2.5"
-                />
-                <path
-                  d="M10 28 Q18 36 28 28"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  fill="none"
-                />
-                <path
-                  d="M8 16 Q18 13 28 16 L28 26 Q18 29 8 26 Z"
-                  fill="#FFB800"
-                />
-                <path
-                  d="M18 17 L19.5 20.5 L23 22 L19.5 23.5 L18 27 L16.5 23.5 L13 22 L16.5 20.5 Z"
-                  fill="white"
-                />
-              </svg>
+              <Logo size={26} />
             </div>
+
             <div>
               <span className="text-white font-bold text-[18px]">Deskwise</span>
               <span className="block text-[10px] uppercase font-semibold text-[#f2b705] tracking-wider">
