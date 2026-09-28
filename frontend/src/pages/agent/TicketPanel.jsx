@@ -7,6 +7,7 @@ import {
   Users,
   ShieldAlert,
   Clock,
+  History,
 } from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
@@ -138,11 +139,17 @@ export default function AgentTicketPanel() {
     const urlSlaRisk = searchParams.get("sla_risk") === "true";
     setFilterSlaRisk(urlSlaRisk);
   }, [searchParams]);
+
   const params = useMemo(() => {
     const p = {};
     if (statusFilter !== "all") p.status = statusFilter;
-    if (panelMode === "mine") p.assigned_to_me = true;
-    else if (panelMode === "unassigned") p.unassigned = true;
+    if (panelMode === "mine") {
+      p.assigned_to_me = true;
+    } else if (panelMode === "unassigned") {
+      p.unassigned = true;
+    } else if (panelMode === "all_dept") {
+      p.is_history = true;
+    }
     if (filterEscalations) {
       p.escalated = true;
     }
@@ -153,6 +160,19 @@ export default function AgentTicketPanel() {
   }, [panelMode, statusFilter, filterEscalations, filterSlaRisk]);
 
   const { tickets, loading, refetch } = useTickets("queue", params);
+
+  // Guarantee that the History tab only displays resolved or closed tickets
+  const displayedTickets = useMemo(() => {
+    if (!tickets) return [];
+    if (panelMode === "all_dept") {
+      return tickets.filter(
+        (t) => t.status === "resolved" || t.status === "closed",
+      );
+    }
+    return tickets.filter(
+      (t) => t.status !== "resolved" && t.status !== "closed",
+    );
+  }, [tickets, panelMode]);
 
   const escalatedCount = useMemo(() => {
     return (tickets || []).filter(
@@ -344,16 +364,16 @@ export default function AgentTicketPanel() {
                 : "bg-[#181b26] border border-[#232632] text-gray-300 hover:text-white"
             }`}
           >
-            <Layers className="h-3.5 w-3.5" />
-            <span>All Department</span>
+            <History className="h-3.5 w-3.5" />
+            <span>History</span>
           </button>
-          
         </div>
       </div>
+
       {/* Ticket Table */}
       <div className="rounded-2xl border border-[#232632] bg-[#141824] p-4 shadow-xl">
         <TicketTable
-          tickets={tickets}
+          tickets={displayedTickets}
           loading={loading}
           departments={departments}
           extraFilter={
