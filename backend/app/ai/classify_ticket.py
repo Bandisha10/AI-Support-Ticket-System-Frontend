@@ -1,13 +1,14 @@
+import gc
 import json
 import logging
 import os
-import gc
 from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
 from dotenv import load_dotenv
 from huggingface_hub import hf_hub_download
-from transformers import AutoTokenizer
+from tokenizers import Tokenizer
 
 from backend.app.ai.redact_pii import redact_pii
 
@@ -20,7 +21,7 @@ DEPT_REPO = "pratik14212/deskwise-departments"
 PRIORITY_REPO = "pratik14212/deskwise-priorities"
 SENTIMENT_REPO = "pratik14212/deskwise-sentiments"
 
-# Load mappings
+# Load label mappings
 MAPPINGS_FILE = Path(__file__).parent / "label_mappings.json"
 id_to_dept: dict[str, str] = {}
 id_to_priority: dict[str, str] = {}
@@ -48,31 +49,43 @@ if MAPPINGS_FILE.exists():
         logger.warning("Could not load label mappings: %s", exc)
 
 _sessions: dict[str, ort.InferenceSession] = {}
-_tokenizers: dict[str, AutoTokenizer] = {}
+_shared_tokenizer: Tokenizer | None = None
 
 
+def _get_tokenizer() -> Tokenizer:
+    """Load a single shared Rust Tokenizer (~30 MB RAM vs 400 MB in transformers)."""
+    global _shared_tokenizer
+    if _shared_tokenizer is None:
+        _shared_tokenizer = Tokenizer.from_pretrained(DEPT_REPO)
+        _shared_tokenizer.enable_truncation(max_length=128)
+        _shared_tokenizer.enable_padding(length=128)
+    return _shared_tokenizer
 
-def _get_onnx_model(repo_id: str):
+
+def _get_onnx_model(repo_id: str) -> ort.InferenceSession:
     """Download quantized ONNX model from Hugging Face Hub (cached) and create low-memory session."""
     if repo_id not in _sessions:
         token = os.getenv("HF_TOKEN") or None
-        _tokenizers[repo_id] = AutoTokenizer.from_pretrained(repo_id, token=token)
         model_path = hf_hub_download(
             repo_id=repo_id,
             filename="model_quantized.onnx",
             token=token,
         )
         sess_options = ort.SessionOptions()
-        sess_options.intra_op_num_threads = 1  # 1 thread keeps CPU/RAM minimal
+        sess_options.intra_op_num_threads = 1
         sess_options.enable_mem_pattern = False
-        _sessions[repo_id] = ort.InferenceSession(model_path, sess_options, providers=["CPUExecutionProvider"])
+        # Disabling CPU memory arena stops ONNX Runtime from hoarding 150MB+ RAM blocks
+        sess_options.enable_cpu_mem_arena = False
+        _sessions[repo_id] = ort.InferenceSession(
+            model_path, sess_options, providers=["CPUExecutionProvider"]
+        )
         gc.collect()
-    return _sessions[repo_id], _tokenizers[repo_id]
+    return _sessions[repo_id]
 
 
 def preload_models() -> None:
     """No-op on startup: load models on-demand to guarantee instant port binding on Render."""
-    logger.info("ONNX models configured for on-demand low-memory loading.")
+    logger.info("ONNX models configured for low-memory on-demand loading.")
 
 
 def _softmax(x):
@@ -80,16 +93,14 @@ def _softmax(x):
     return e_x / e_x.sum(axis=0)
 
 
-def _predict_onnx(text: str, repo_id: str, label_map: dict[str, str], default_label: str) -> dict:
+def _predict_onnx(
+    ort_inputs: dict[str, np.ndarray],
+    repo_id: str,
+    label_map: dict[str, str],
+    default_label: str,
+) -> dict:
     try:
-        session, tokenizer = _get_onnx_model(repo_id)
-        inputs = tokenizer(text, truncation=True, max_length=512, return_tensors="np")
-
-        ort_inputs = {
-            "input_ids": inputs["input_ids"].astype(np.int64),
-            "attention_mask": inputs["attention_mask"].astype(np.int64),
-        }
-
+        session = _get_onnx_model(repo_id)
         logits = session.run(["logits"], ort_inputs)[0][0]
         probs = _softmax(logits)
 
@@ -112,14 +123,31 @@ def _predict_onnx(text: str, repo_id: str, label_map: dict[str, str], default_la
 
 def classify_ticket(subject: str, body: str) -> dict:
     raw_text = f"{subject}. {body}" if subject else body
-    redacted = redact_pii(raw_text)
+    text_for_ai = redact_pii(raw_text).text
+    body_redacted = redact_pii(body).text if body else ""
 
-    category_result = _predict_onnx(redacted.text, DEPT_REPO, id_to_dept, default_label="Customer Experience")
-    priority_result = _predict_onnx(redacted.text, PRIORITY_REPO, id_to_priority, default_label="medium")
-    sentiment_result = _predict_onnx(redacted.text, SENTIMENT_REPO, id_to_sentiment, default_label="neutral")
+    # Tokenize once for all 3 models
+    tokenizer = _get_tokenizer()
+    encoded = tokenizer.encode(text_for_ai)
+    ort_inputs = {
+        "input_ids": np.array([encoded.ids], dtype=np.int64),
+        "attention_mask": np.array([encoded.attention_mask], dtype=np.int64),
+    }
+
+    category_result = _predict_onnx(
+        ort_inputs, DEPT_REPO, id_to_dept, default_label="Customer Experience"
+    )
+    priority_result = _predict_onnx(
+        ort_inputs, PRIORITY_REPO, id_to_priority, default_label="medium"
+    )
+    sentiment_result = _predict_onnx(
+        ort_inputs, SENTIMENT_REPO, id_to_sentiment, default_label="neutral"
+    )
+
+    gc.collect()
 
     return {
-        "body_redacted": redacted.text,
+        "body_redacted": body_redacted,
         "category": category_result,
         "priority": priority_result,
         "sentiment": sentiment_result,
@@ -127,5 +155,7 @@ def classify_ticket(subject: str, body: str) -> dict:
 
 
 if __name__ == "__main__":
-    result = classify_ticket("Billing issue", "My credit card was charged twice for the monthly plan.")
+    result = classify_ticket(
+        "Billing issue", "My credit card was charged twice for the monthly plan."
+    )
     print("\nClassification Result:\n", json.dumps(result, indent=2))

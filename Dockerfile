@@ -9,12 +9,10 @@ WORKDIR /app
 # 1. Install curl for healthchecks
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# 2. Copy root requirements and install CPU-only PyTorch first (saves ~2 GB Docker image size)
 # 2. Copy root requirements and install dependencies
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
-
 
 # 3. Copy application code
 COPY backend ./backend
