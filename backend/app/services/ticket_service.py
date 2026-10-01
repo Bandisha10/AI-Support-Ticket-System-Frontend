@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,6 +32,8 @@ from backend.app.schemas.ticket import (
 )
 from backend.app.services.manager_service import get_active_department_manager
 from backend.app.services.storage_service import get_ticket_attachments
+from backend.app.models.ticket_rating import TicketRating
+from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
 
 logger = logging.getLogger(__name__)
 ticket_crud = CRUDBase(Ticket)
@@ -192,7 +194,7 @@ async def create_ticket_workflow(
                     f"Automated Escalation: Ticket flagged with priority '{priority_val.value}' and "
                     f"sentiment '{sentiment_val.value}'. Assigned directly to Department Manager ({manager.email})."
                 ),
-                is_internal_note=True,
+                is_system_log=True,
             )
         )
         await db.commit()
@@ -341,7 +343,7 @@ async def update_ticket_workflow(
                     ticket_id=obj.id,
                     author_id=current_user.id,
                     body=f"Delegation Audit: {actor_role} ({current_user.email}) delegated ticket to {target_name} ({target_agent.email}).",
-                    is_internal_note=True,
+                    is_system_log=True,
                 )
             )
             # Send email notification to the delegated agent
@@ -409,7 +411,7 @@ async def update_ticket_workflow(
                     ticket_id=obj.id,
                     author_id=manager.id,
                     body=f"{reason}. Reassigned to Department Manager ({manager.email}).",
-                    is_internal_note=True,
+                    is_system_log=True,
                 )
             )
             manager_email_payload = dict(
@@ -449,3 +451,271 @@ async def update_ticket_workflow(
 
     attachments = await get_ticket_attachments(updated.id, db)
     return ticket_to_read(updated, customer_email, sla_due_at, attachments)
+
+# Lines 455-470 in backend/app/services/ticket_service.py
+async def list_tickets_workflow(
+    db: AsyncSession,
+    current_user: User,
+    status_: TicketStatus | None = None,
+    priority: TicketPriority | None = None,
+    department_id: UUID | None = None,
+    assigned_to_me: bool | None = None,
+    unassigned: bool | None = None,
+    escalated: bool | None = None,
+    assigned_agent_id: UUID | None = None,
+    sla_status: str | None = None,
+    needs_triage: bool | None = None,
+    is_history: bool | None = None,
+    created_at: str | None = None,
+    date_range: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> list[TicketRead]:
+    """Builds filtered ticket queries according to user role, SLA status, and triage rules."""
+    query = (
+        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
+        .outerjoin(User, Ticket.customer_id == User.id)
+        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
+    )
+
+    if sla_status:
+        now_dt = datetime.now(timezone.utc) if hasattr(timezone, "utc") else datetime.utcnow()
+        query = query.where(
+            Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
+        )
+        if sla_status == "breached":
+            query = query.where(
+                (SLAState.breached.is_(True)) | (SLAState.resolution_due_at <= now_dt)
+            )
+        elif sla_status == "at_risk":
+            risk_window = now_dt + timedelta(minutes=60)
+            query = query.where(
+                SLAState.breached.is_(False),
+                SLAState.resolution_due_at > now_dt,
+                SLAState.resolution_due_at <= risk_window,
+            )
+        elif sla_status in ("all_risk", "at_risk_or_breached"):
+            risk_window = now_dt + timedelta(minutes=60)
+            query = query.where(
+                (SLAState.breached.is_(True))
+                | (SLAState.resolution_due_at <= risk_window)
+            )
+
+    if current_user.role == UserRole.customer:
+        query = query.where(Ticket.customer_id == current_user.id)
+        
+    elif current_user.role == UserRole.agent:
+        if assigned_to_me:
+            query = query.where(Ticket.assigned_agent_id == current_user.id)
+        elif unassigned:
+            query = query.where(
+                (Ticket.department_id == current_user.department_id)
+                | (Ticket.department_id.is_(None)),
+                Ticket.assigned_agent_id.is_(None),
+            )
+        elif assigned_agent_id:
+            query = query.where(
+                (Ticket.department_id == current_user.department_id)
+                | (Ticket.department_id.is_(None)),
+                Ticket.assigned_agent_id == assigned_agent_id,
+            )
+        else:
+            query = query.where(
+                (Ticket.department_id == current_user.department_id)
+                | (Ticket.department_id.is_(None))
+                | (Ticket.assigned_agent_id == current_user.id)
+            )
+
+    elif current_user.role == UserRole.admin:
+        if not status_ and not is_history:
+            query = query.where(
+                Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
+            )
+
+    if is_history:
+        query = query.where(
+            Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed])
+        )
+
+    elif status_:
+        query = query.where(Ticket.status == status_)
+
+    elif not status_ and (assigned_to_me or unassigned):
+        query = query.where(
+            Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
+        )
+
+    if priority:
+        query = query.where(Ticket.priority == priority)
+
+    if department_id:
+        query = query.where(Ticket.department_id == department_id)
+
+    # Created At / Date Filtering
+    if created_at:
+        try:
+            clean_date = created_at.strip().split("T")[0]
+            dt = datetime.fromisoformat(clean_date)
+            start_of_day = datetime.combine(dt.date(), time.min)
+            end_of_day = datetime.combine(dt.date(), time.max)
+            query = query.where(
+                Ticket.created_at >= start_of_day,
+                Ticket.created_at <= end_of_day,
+            )
+        except Exception as exc:
+            logger.warning("Invalid created_at parameter '%s': %s", created_at, exc)
+    elif date_range or start_date or end_date:
+        now = datetime.now()
+        if date_range == "today":
+            start_of_today = datetime.combine(now.date(), time.min)
+            end_of_today = datetime.combine(now.date(), time.max)
+            query = query.where(
+                Ticket.created_at >= start_of_today,
+                Ticket.created_at <= end_of_today,
+            )
+        elif date_range == "week":
+            query = query.where(Ticket.created_at >= now - timedelta(days=7))
+        elif date_range == "month":
+            query = query.where(Ticket.created_at >= now - timedelta(days=30))
+        elif date_range == "custom" or start_date or end_date:
+            if start_date:
+                try:
+                    s_clean = start_date.strip().split("T")[0]
+                    s_dt = datetime.fromisoformat(s_clean)
+                    query = query.where(
+                        Ticket.created_at >= datetime.combine(s_dt.date(), time.min)
+                    )
+                except Exception as exc:
+                    logger.warning("Invalid start_date '%s': %s", start_date, exc)
+            if end_date:
+                try:
+                    e_clean = end_date.strip().split("T")[0]
+                    e_dt = datetime.fromisoformat(e_clean)
+                    query = query.where(
+                        Ticket.created_at <= datetime.combine(e_dt.date(), time.max)
+                    )
+                except Exception as exc:
+                    logger.warning("Invalid end_date '%s': %s", end_date, exc)
+
+
+    if escalated:
+        query = query.where(
+            (Ticket.priority == TicketPriority.high)
+            | (Ticket.sentiment == TicketSentiment.negative)
+        )
+
+    if assigned_to_me and current_user.role != UserRole.agent:
+        query = query.where(Ticket.assigned_agent_id == current_user.id)
+
+    if unassigned and current_user.role != UserRole.agent:
+        query = query.where(Ticket.assigned_agent_id.is_(None))
+
+    if assigned_agent_id and current_user.role != UserRole.agent:
+        query = query.where(Ticket.assigned_agent_id == assigned_agent_id)
+
+    if needs_triage is not None and current_user.role == UserRole.admin:
+        if needs_triage:
+            query = query.where(
+                (
+                    Ticket.classification_confidence.is_(None)
+                    | (Ticket.classification_confidence != 1.0)
+                )
+                & (
+                    (Ticket.department_id.is_(None))
+                    | (Ticket.classification_confidence < 0.6)
+                )
+            )
+        else:
+            query = query.where(
+                (Ticket.classification_confidence == 1.0)
+                | (
+                    (Ticket.classification_confidence >= 0.6)
+                    & (Ticket.department_id.is_not(None))
+                )
+            )
+
+    query = query.order_by(Ticket.created_at.desc()).offset(skip).limit(limit)
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        ticket_to_read(ticket, customer_email, sla_due_at)
+        for ticket, customer_email, sla_due_at in rows
+    ]
+
+
+async def get_ticket_workflow(
+    ticket_id: UUID,
+    db: AsyncSession,
+    current_user: User,
+) -> TicketRead:
+    """Retrieves single ticket with SLA status and attachments, enforcing customer RBAC."""
+    query = (
+        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
+        .outerjoin(User, Ticket.customer_id == User.id)
+        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
+        .where(Ticket.id == ticket_id)
+    )
+    result = await db.execute(query)
+    row = result.first()
+    if not row:
+        raise HTTPException(404, "Ticket not found")
+
+    ticket, customer_email, sla_due_at = row
+    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
+        raise HTTPException(403, "Not allowed")
+    
+    if current_user.role == UserRole.agent:
+        is_in_dept = (
+            ticket.department_id is None
+            or current_user.department_id is None
+            or ticket.department_id == current_user.department_id
+        )
+        if not is_in_dept and ticket.assigned_agent_id != current_user.id:
+            raise HTTPException(403, "Not allowed to view tickets outside your department")
+
+
+    attachments = await get_ticket_attachments(ticket.id, db)
+    return ticket_to_read(ticket, customer_email, sla_due_at, attachments)
+
+
+async def rate_ticket_workflow(
+    ticket_id: UUID,
+    payload: TicketRatingCreate,
+    db: AsyncSession,
+    current_user: User,
+) -> TicketRating:
+    """Records customer satisfaction rating for a resolved/closed ticket."""
+    ticket = await ticket_crud.get(db, ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    if ticket.customer_id != current_user.id:
+        raise HTTPException(403, "Not allowed")
+    if ticket.status not in (TicketStatus.resolved, TicketStatus.closed):
+        raise HTTPException(400, "Can only rate resolved or closed tickets")
+
+    existing = (
+        await db.execute(
+            select(TicketRating).where(TicketRating.ticket_id == ticket_id)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise HTTPException(400, "Ticket already rated")
+
+    rating = TicketRating(
+        ticket_id=ticket_id, rating=payload.rating, feedback=payload.feedback
+    )
+    db.add(rating)
+    await db.commit()
+    await db.refresh(rating)
+    return rating
+
+
+async def delete_ticket_workflow(ticket_id: UUID, db: AsyncSession) -> None:
+    """Deletes a ticket."""
+    obj = await ticket_crud.get(db, ticket_id)
+    if not obj:
+        raise HTTPException(404, "Ticket not found")
+    await ticket_crud.delete(db, obj)
