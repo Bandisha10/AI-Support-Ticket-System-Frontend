@@ -14,10 +14,14 @@ BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 class MailNotConfiguredError(RuntimeError):
-    """Raised when neither Brevo API key nor SMTP credentials are provided."""
+    """Raised when neither Brevo API key nor SMTP credentials are configured."""
 
 
 def _send_via_brevo_api(to: str, subject: str, text_body: str, html_body: str | None = None) -> None:
+    """
+    Dispatches outbound email through Brevo's v3 HTTPS Transactional Email API.
+    Preferred over SMTP on serverless and containerized platforms to avoid port 587 throttling.
+    """
     headers = {
         "accept": "application/json",
         "api-key": settings.BREVO_API_KEY,
@@ -45,6 +49,9 @@ def _send_via_brevo_api(to: str, subject: str, text_body: str, html_body: str | 
 
 
 def _smtp_client() -> smtplib.SMTP:
+    """
+    Fallback TLS SMTP client for environments without an active Brevo API key.
+    """
     if not settings.SMTP_USER or not settings.SMTP_PASSWORD:
         raise MailNotConfiguredError(
             "Neither BREVO_API_KEY nor SMTP_USER/SMTP_PASSWORD are set in .env"
@@ -59,7 +66,15 @@ def _smtp_client() -> smtplib.SMTP:
 
 
 def send_email(to: str, subject: str, text_body: str, html_body: str | None = None) -> None:
-    """Blocking. Call from FastAPI via run_in_threadpool(...)."""
+    """
+    Main email dispatch entry point.
+    
+    CRITICAL IMPLEMENTATION NOTE:
+    This function performs synchronous/blocking network I/O.
+    When invoked from async FastAPI endpoints or services, it MUST be wrapped with:
+        await starlette.concurrency.run_in_threadpool(send_email, ...)
+    to avoid blocking the main asyncio event loop.
+    """
     if settings.BREVO_API_KEY:
         _send_via_brevo_api(to, subject, text_body, html_body)
         logger.info("Email sent via Brevo API to %s", to)
@@ -80,7 +95,6 @@ def send_email(to: str, subject: str, text_body: str, html_body: str | None = No
     with _smtp_client() as smtp:
         smtp.send_message(msg)
     logger.info("Email sent via Brevo SMTP to %s", to)
-
 
 # ============================================================================
 # Core HTML Email Layout Wrapper (Responsive & Cross-Client Compatible)

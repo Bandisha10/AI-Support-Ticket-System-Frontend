@@ -7,15 +7,12 @@ from backend.app.database import get_db
 from backend.app.models.department import Department
 from backend.app.models.ticket import Ticket
 from backend.app.models.enums import UserRole
-from backend.app.schemas.department import DepartmentCreate, DepartmentUpdate, DepartmentRead
+from backend.app.schemas.department import DepartmentCreate, DepartmentUpdate, DepartmentRead, DepartmentWithCount
 from backend.app.crud.base import CRUDBase
 from backend.app.dependencies import get_current_user, require_role
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
 crud = CRUDBase(Department)
-
-class DepartmentWithCount(DepartmentRead):
-    ticket_count: int
 
 @router.post("/", response_model=DepartmentRead, status_code=201, dependencies=[Depends(require_role(UserRole.admin))])
 async def create_department(payload: DepartmentCreate, db: AsyncSession = Depends(get_db)):

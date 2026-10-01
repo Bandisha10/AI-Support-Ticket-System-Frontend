@@ -36,3 +36,6 @@ class DepartmentRead(BaseModel):
     id: UUID
     name: str
     model_config = ConfigDict(from_attributes=True)
+
+class DepartmentWithCount(DepartmentRead):
+    ticket_count: int

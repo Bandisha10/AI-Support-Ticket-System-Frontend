@@ -105,7 +105,7 @@ async def check_and_warn_at_risk_slas(db: AsyncSession) -> int:
                     f"• Current Assignee: {agent_name}\n"
                     f"• Directive: {target_mgr_text} alerted for mandatory managerial intervention or reassignment."
                 ),
-                is_internal_note=True,
+                is_system_log=True,
             ))
 
             if manager:
@@ -143,7 +143,7 @@ async def check_and_warn_at_risk_slas(db: AsyncSession) -> int:
                     f"• Current Assignee: {agent_name}\n"
                     f"• Action Required: {target_mgr_text} notified to expedite resolution or re-delegate before contractual violation."
                 ),
-                is_internal_note=True,
+                is_system_log=True,
             ))
 
             if manager:

@@ -128,36 +128,7 @@ async def me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    department_name = None
-    if current_user.department_id:
-        dept = await db.get(Department, current_user.department_id)
-        if dept:
-            department_name = dept.name
-
-    invited_by_email = None
-    if current_user.invited_by:
-        inviter = await db.get(User, current_user.invited_by)
-        if inviter:
-            invited_by_email = inviter.email
-
-    return UserRead(
-        id=current_user.id,
-        email=current_user.email,
-        first_name=current_user.first_name,
-        last_name=current_user.last_name,
-        agent_tier=current_user.agent_tier,
-        role=current_user.role,
-        department_id=current_user.department_id,
-        department_name=department_name,
-        created_at=current_user.created_at or datetime.now(timezone.utc),
-        is_active=current_user.is_active,
-        is_archive=bool(getattr(current_user, "is_archive", False) or False),
-        phone_number=current_user.phone_number,
-        invited_by=current_user.invited_by,
-        invited_by_email=invited_by_email,
-        invited_at=current_user.invited_at,
-        must_change_password=current_user.must_change_password,
-    )
+    return await auth_service.get_me_workflow(current_user, db)
 
 
 @router.put("/me", response_model=UserRead)
@@ -167,34 +138,7 @@ async def update_my_profile(
     db: AsyncSession = Depends(get_db),
 ):
     """Allows the signed-in user to update their own contact information."""
-    if payload.first_name is not None:
-        current_user.first_name = payload.first_name.strip()
-    if payload.last_name is not None:
-        current_user.last_name = payload.last_name.strip()
-    if payload.phone_number is not None:
-        clean_phone = payload.phone_number.strip() or None
-        if clean_phone:
-            existing = await db.execute(
-                select(User).where(
-                    User.phone_number == clean_phone, User.id != current_user.id
-                )
-            )
-            if existing.scalar_one_or_none():
-                raise HTTPException(
-                    409, "This phone number is already in use by another account."
-                )
-        current_user.phone_number = clean_phone
-
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            409, "This phone number is already in use by another account."
-        )
-
-    await db.refresh(current_user)
-    return await me(current_user=current_user, db=db)
+    return await auth_service.update_my_profile_workflow(payload, current_user, db)
 
 
 @router.post("/change-password", response_model=PasswordChangedResponse)

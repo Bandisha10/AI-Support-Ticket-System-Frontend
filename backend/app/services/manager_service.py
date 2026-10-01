@@ -80,7 +80,7 @@ async def reroute_agent_tickets_on_absence(
             ticket_id=t.id,
             author_id=agent.id,
             body=note,
-            is_internal_note=True,
+            is_system_log=True,
         ))
         reassigned_count += 1
 
@@ -135,7 +135,7 @@ async def reroute_manager_tickets_on_demotion(
             ticket_id=t.id,
             author_id=former_manager.id,
             body=note,
-            is_internal_note=True,
+            is_system_log=True,
         ))
         reassigned_count += 1
 
