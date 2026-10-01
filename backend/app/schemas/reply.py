@@ -10,9 +10,7 @@ class ReplyCreate(BaseModel):
         max_length=10000,
         description="Reply message body",
     )
-    is_auto_reply: bool = False
-    is_internal_note: bool = False
-
+    is_system_log: bool = False
     @field_validator("body")
     @classmethod
     def sanitize_reply_body(cls, v: str) -> str:
@@ -28,8 +26,7 @@ class ReplyRead(BaseModel):
     ticket_id: UUID
     author_id: UUID | None
     author_email: str | None = None
-    is_auto_reply: bool
-    is_internal_note: bool
+    is_system_log: bool
     body: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)

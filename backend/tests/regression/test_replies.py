@@ -37,7 +37,7 @@ def test_customer_cannot_reply_to_other_customers_ticket(client, customer_user, 
 
 
 def test_customer_internal_note_tampering_prevented(client, customer_user, mock_db_session):
-    """Regression: When a customer sends is_internal_note=True, the server must force it to False."""
+    """Regression: When a customer sends is_system_log=True, the server must force it to False."""
     mock_ticket = Ticket(
         id=uuid.uuid4(),
         customer_id=customer_user.id,
@@ -50,18 +50,16 @@ def test_customer_internal_note_tampering_prevented(client, customer_user, mock_
 
     app.dependency_overrides[get_current_user] = lambda: customer_user
 
-    # Attempt to sneak is_internal_note=True
+    # Attempt to sneak is_system_log=True
     res = client.post(
         "/replies/",
         json={
             "ticket_id": str(mock_ticket.id),
             "body": "Customer response",
-            "is_internal_note": True,
-            "is_auto_reply": True,
+            "is_system_log": True,
         },
     )
     assert res.status_code == 201
-    # Check that the saved payload had is_internal_note overridden to False
+    # Check that the saved payload had is_system_log overridden to False
     created_obj = mock_db_session.add.call_args[0][0]
-    assert created_obj.is_internal_note is False
-    assert created_obj.is_auto_reply is False
+    assert created_obj.is_system_log is False
