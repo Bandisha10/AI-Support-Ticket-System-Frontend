@@ -1,3 +1,8 @@
+"""
+Observability & APM Integration Module.
+Initializes Sentry error tracking, FastAPI/SQLAlchemy performance tracing,
+and executes PII/credential scrubbing on all outbound crash reports.
+"""
 import logging
 import os
 
@@ -13,7 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 def _before_send(event, hint):
-    """Sanitize sensitive headers and tokens before sending to Sentry."""
+    """
+    Security Sanitizer Hook.
+    Redacts Authorization headers, session cookies, and Supabase tokens
+    to prevent credential leakage to monitoring dashboards.
+    """
     try:
         headers = event.get("request", {}).get("headers")
         if headers:
@@ -26,11 +35,15 @@ def _before_send(event, hint):
 
 
 def init_sentry() -> None:
+    """
+    Initializes Sentry SDK if SENTRY_DSN is configured.
+    Hooks into Starlette, FastAPI, SQLAlchemy, and standard logging.
+    """
     if not settings.SENTRY_DSN:
         logger.info("SENTRY_DSN not set - Sentry disabled.")
         return
 
-    # Automatically tag the Git commit hash deployed on Render if available
+    # Automatically tags Git commit hash in deployment environments (Render/Railway)
     release = os.getenv("RENDER_GIT_COMMIT", f"{settings.APP_NAME}@1.0.0")
 
     sentry_sdk.init(
@@ -38,7 +51,7 @@ def init_sentry() -> None:
         environment=settings.SENTRY_ENVIRONMENT,
         release=release,
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
-        send_default_pii=False,
+        send_default_pii=False,  # Enforces privacy by default
         integrations=[
             StarletteIntegration(),
             FastApiIntegration(),

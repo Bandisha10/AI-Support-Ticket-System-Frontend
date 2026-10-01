@@ -25,3 +25,4 @@ backend/app/ai/model_artifacts/
 index.py
 .vercel
 onnx_exports/
+.agents/

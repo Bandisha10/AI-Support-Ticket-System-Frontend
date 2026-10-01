@@ -9,10 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.crud.base import CRUDBase
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user, require_role
-from backend.app.models.enums import UserRole
+from backend.app.models.enums import AgentTier, UserRole
 from backend.app.models.user import User
 from backend.app.schemas.user import (
     AgentAvailabilityUpdate,
@@ -27,8 +26,6 @@ from backend.app.services import user_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["Users"])
-crud = CRUDBase(User)
-
 
 @router.post(
     "/invite-agent",
@@ -56,11 +53,9 @@ async def list_users(
     includes_archived: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(User).where(User.email != user_service.SUPER_ADMIN_EMAIL)
-    if not includes_archived:
-        query = query.where(User.is_archive.is_(False))
-    result = await db.execute(query.offset(skip).limit(limit))
-    return result.scalars().all()
+    return await user_service.list_users_workflow(
+        db=db, skip=skip, limit=limit, includes_archived=includes_archived
+    )
 
 
 @router.get(
@@ -69,10 +64,7 @@ async def list_users(
     dependencies=[Depends(require_role(UserRole.admin))],
 )
 async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
-    obj = await crud.get(db, user_id)
-    if not obj or user_service.is_super_admin(obj):
-        raise HTTPException(404, "User not found")
-    return obj
+    return await user_service.get_user_workflow(user_id, db)
 
 
 @router.put(

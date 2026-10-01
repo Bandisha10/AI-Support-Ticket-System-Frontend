@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.crud.base import CRUDBase
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.enums import (
@@ -39,7 +38,6 @@ from backend.app.services.ticket_service import ticket_to_read as _ticket_to_rea
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
-crud = CRUDBase(Ticket)
 
 
 @router.post("/", response_model=TicketRead, status_code=201)
@@ -65,161 +63,36 @@ async def list_tickets(
     ),
     needs_triage: bool | None = Query(None),
     is_history: bool | None = Query(None),
+    created_at: str | None = Query(None, description="Exact date YYYY-MM-DD"),
+    date_range: str | None = Query(None, description="'today', 'week', 'month', 'custom'"),
+    start_date: str | None = Query(None, description="Created at >= start_date (YYYY-MM-DD)"),
+    end_date: str | None = Query(None, description="Created at <= end_date (YYYY-MM-DD)"),
     skip: int = Query(0, ge=0, description="Pagination offset (>= 0)"),
     limit: int = Query(50, ge=1, le=100, description="Max items per page (1-100)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-
-    status_val = status_ if not hasattr(status_, "default") else status_.default
-    priority_val = priority if not hasattr(priority, "default") else priority.default
-    dept_id_val = (
-        department_id
-        if not hasattr(department_id, "default")
-        else department_id.default
-    )
-    assigned_to_me_val = (
-        assigned_to_me
-        if not hasattr(assigned_to_me, "default")
-        else assigned_to_me.default
-    )
-    unassigned_val = (
-        unassigned if not hasattr(unassigned, "default") else unassigned.default
-    )
-    escalated_val = (
-        escalated if not hasattr(escalated, "default") else escalated.default
-    )
-    assigned_agent_id_val = (
-        assigned_agent_id
-        if not hasattr(assigned_agent_id, "default")
-        else assigned_agent_id.default
-    )
-    sla_status_val = (
-        sla_status if not hasattr(sla_status, "default") else sla_status.default
-    )
-    needs_triage_val = (
-        needs_triage if not hasattr(needs_triage, "default") else needs_triage.default
-    )
-    is_history_val = (
-        is_history if not hasattr(is_history, "default") else is_history.default
-    )
-    skip_val = int(skip if not hasattr(skip, "default") else (skip.default or 0))
-    limit_val = int(limit if not hasattr(limit, "default") else (limit.default or 50))
-
-    query = (
-        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
-        .outerjoin(User, Ticket.customer_id == User.id)
-        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
+    return await ticket_service.list_tickets_workflow(
+        db=db,
+        current_user=current_user,
+        status_=status_,
+        priority=priority,
+        department_id=department_id,
+        assigned_to_me=assigned_to_me,
+        unassigned=unassigned,
+        escalated=escalated,
+        assigned_agent_id=assigned_agent_id,
+        sla_status=sla_status,
+        needs_triage=needs_triage,
+        is_history=is_history,
+        created_at=created_at,
+        date_range=date_range,
+        start_date=start_date,
+        end_date=end_date,
+        skip=skip,
+        limit=limit,
     )
 
-    if sla_status_val:
-        now_dt = datetime.now(timezone.utc)
-        query = query.where(
-            Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
-        )
-        if sla_status_val == "breached":
-            query = query.where(
-                (SLAState.breached.is_(True)) | (SLAState.resolution_due_at <= now_dt)
-            )
-        elif sla_status_val == "at_risk":
-            risk_window = now_dt + timedelta(minutes=60)
-            query = query.where(
-                SLAState.breached.is_(False),
-                SLAState.resolution_due_at > now_dt,
-                SLAState.resolution_due_at <= risk_window,
-            )
-        elif sla_status_val in ("all_risk", "at_risk_or_breached"):
-            risk_window = now_dt + timedelta(minutes=60)
-            query = query.where(
-                (SLAState.breached.is_(True))
-                | (SLAState.resolution_due_at <= risk_window)
-            )
-
-    if current_user.role == UserRole.customer:
-        query = query.where(Ticket.customer_id == current_user.id)
-    elif current_user.role == UserRole.agent:
-        if assigned_to_me_val:
-            query = query.where(Ticket.assigned_agent_id == current_user.id)
-        elif unassigned_val:
-            query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None)),
-                Ticket.assigned_agent_id.is_(None),
-            )
-        elif assigned_agent_id_val:
-            query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None)),
-                Ticket.assigned_agent_id == assigned_agent_id_val,
-            )
-        else:
-            query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None))
-                | (Ticket.assigned_agent_id == current_user.id)
-            )
-    elif current_user.role == UserRole.admin:
-        if not status_val:
-            query = query.where(
-                Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
-            )
-
-    if is_history_val:
-        query = query.where(
-            Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed])
-        )
-    elif status_val:
-        query = query.where(Ticket.status == status_val)
-    elif not status_val and (assigned_to_me_val or unassigned_val):
-        query = query.where(
-            Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
-        )
-
-    if priority_val:
-        query = query.where(Ticket.priority == priority_val)
-    if dept_id_val:
-        query = query.where(Ticket.department_id == dept_id_val)
-    if escalated_val:
-        query = query.where(
-            (Ticket.priority == TicketPriority.high)
-            | (Ticket.sentiment == TicketSentiment.negative)
-        )
-    if assigned_to_me_val and current_user.role != UserRole.agent:
-        query = query.where(Ticket.assigned_agent_id == current_user.id)
-    if unassigned_val and current_user.role != UserRole.agent:
-        query = query.where(Ticket.assigned_agent_id.is_(None))
-    if assigned_agent_id_val and current_user.role != UserRole.agent:
-        query = query.where(Ticket.assigned_agent_id == assigned_agent_id_val)
-
-    if needs_triage_val is not None and current_user.role == UserRole.admin:
-        if needs_triage_val:
-            query = query.where(
-                (
-                    Ticket.classification_confidence.is_(None)
-                    | (Ticket.classification_confidence != 1.0)
-                )
-                & (
-                    (Ticket.department_id.is_(None))
-                    | (Ticket.classification_confidence < 0.6)
-                )
-            )
-        else:
-            query = query.where(
-                (Ticket.classification_confidence == 1.0)
-                | (
-                    (Ticket.classification_confidence >= 0.6)
-                    & (Ticket.department_id.is_not(None))
-                )
-            )
-
-    query = query.order_by(Ticket.created_at.desc()).offset(skip_val).limit(limit_val)
-    result = await db.execute(query)
-    rows = result.all()
-
-    return [
-        _ticket_to_read(ticket, customer_email, sla_due_at)
-        for ticket, customer_email, sla_due_at in rows
-    ]
 
 
 @router.get("/analytics")
@@ -265,29 +138,7 @@ async def rate_ticket(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ticket = await crud.get(db, ticket_id)
-    if not ticket:
-        raise HTTPException(404, "Ticket not found")
-    if ticket.customer_id != current_user.id:
-        raise HTTPException(403, "Not allowed")
-    if ticket.status not in (TicketStatus.resolved, TicketStatus.closed):
-        raise HTTPException(400, "Can only rate resolved or closed tickets")
-
-    existing = (
-        await db.execute(
-            select(TicketRating).where(TicketRating.ticket_id == ticket_id)
-        )
-    ).scalar_one_or_none()
-    if existing:
-        raise HTTPException(400, "Ticket already rated")
-
-    rating = TicketRating(
-        ticket_id=ticket_id, rating=payload.rating, feedback=payload.feedback
-    )
-    db.add(rating)
-    await db.commit()
-    await db.refresh(rating)
-    return rating
+    return await ticket_service.rate_ticket_workflow(ticket_id, payload, db, current_user)
 
 
 @router.post(
@@ -333,29 +184,15 @@ async def download_ticket_attachment(
     )
 
 
+
 @router.get("/{ticket_id}", response_model=TicketRead)
 async def get_ticket(
     ticket_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    query = (
-        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
-        .outerjoin(User, Ticket.customer_id == User.id)
-        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
-        .where(Ticket.id == ticket_id)
-    )
-    result = await db.execute(query)
-    row = result.first()
-    if not row:
-        raise HTTPException(404, "Ticket not found")
+    return await ticket_service.get_ticket_workflow(ticket_id, db, current_user)
 
-    ticket, customer_email, sla_due_at = row
-    if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
-        raise HTTPException(403, "Not allowed")
-
-    attachments = await _get_ticket_attachments(ticket.id, db)
-    return _ticket_to_read(ticket, customer_email, sla_due_at, attachments)
 
 
 @router.put(
@@ -380,7 +217,4 @@ async def update_ticket(
     dependencies=[Depends(require_role(UserRole.admin))],
 )
 async def delete_ticket(ticket_id: UUID, db: AsyncSession = Depends(get_db)):
-    obj = await crud.get(db, ticket_id)
-    if not obj:
-        raise HTTPException(404, "Ticket not found")
-    await crud.delete(db, obj)
+    await ticket_service.delete_ticket_workflow(ticket_id, db)

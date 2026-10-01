@@ -82,8 +82,7 @@ async def calculate_avg_response_seconds(
 ) -> float | None:
     """Calculates average first response time (seconds) between ticket creation and the first public human agent reply."""
     reply_conditions = [
-        Reply.is_auto_reply.is_(False),
-        Reply.is_internal_note.is_(False),
+        Reply.is_system_log.is_(False),
         Reply.author_id != Ticket.customer_id,
     ]
     if agent_id:
@@ -305,8 +304,7 @@ async def get_dashboard_analytics(
         )
         .join(Ticket, Reply.ticket_id == Ticket.id)
         .where(
-            Reply.is_auto_reply.is_(False),
-            Reply.is_internal_note.is_(False),
+            Reply.is_system_log.is_(False),
             Reply.author_id != Ticket.customer_id,
         )
         .group_by(Reply.author_id, Reply.ticket_id)

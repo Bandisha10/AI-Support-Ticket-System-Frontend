@@ -1,9 +1,18 @@
 import { useState, useRef } from "react";
-import { UploadCloud, X, FileText, Image as ImageIcon, Paperclip } from "lucide-react";
+import {
+  UploadCloud,
+  X,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+} from "lucide-react";
 import Button from "../common/Button";
 import { useToast } from "../common/Toast";
 import * as ticketService from "../../services/ticketService";
-import { validateAttachmentFile } from "../../utils/attachments";
+import {
+  validateAttachmentFile,
+  ALLOWED_EXTENSIONS,
+} from "../../utils/attachments";
 
 function formatFileSize(bytes) {
   if (bytes === 0) return "0 Bytes";
@@ -15,7 +24,7 @@ function formatFileSize(bytes) {
 
 export default function TicketForm({ onCreated }) {
   const { showToast } = useToast();
-  const [form, setForm] = useState({ subject: "", description: ""});
+  const [form, setForm] = useState({ subject: "", description: "" });
   const [submitting, setSubmitting] = useState(false);
   const [attachments, setAttachments] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -42,7 +51,9 @@ export default function TicketForm({ onCreated }) {
         name: file.name,
         size: file.size,
         type: file.type,
-        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+        previewUrl: file.type.startsWith("image/")
+          ? URL.createObjectURL(file)
+          : null,
       });
     }
 
@@ -93,18 +104,24 @@ export default function TicketForm({ onCreated }) {
           ? `Ticket submitted successfully with ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`
           : "Ticket submitted successfully";
       showToast(msg, "success");
-      setForm({ subject: "", description: ""});
+      setForm({ subject: "", description: "" });
       setAttachments([]);
       onCreated?.(ticket);
     } catch (err) {
-      showToast(err.response?.data?.detail || "Could not submit ticket", "error");
+      showToast(
+        err.response?.data?.detail || "Could not submit ticket",
+        "error",
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-surface-border bg-surface-card p-6 sm:p-8">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-5 rounded-2xl border border-surface-border bg-surface-card p-6 sm:p-8"
+    >
       <div>
         <label className="mb-1.5 block text-sm font-medium text-gray-300">
           Subject <span className="text-accent">*</span>
@@ -154,6 +171,7 @@ export default function TicketForm({ onCreated }) {
             ref={fileInputRef}
             type="file"
             multiple
+            accept={ALLOWED_EXTENSIONS.join(",")}
             className="hidden"
             onChange={(e) => handleFileSelect(e.target.files)}
           />
@@ -162,10 +180,11 @@ export default function TicketForm({ onCreated }) {
               <UploadCloud className="h-5 w-5" />
             </div>
             <p className="text-sm font-medium text-gray-300">
-              <span className="text-accent underline">Click to upload</span> or drag and drop files
+              <span className="text-accent underline">Click to upload</span> or
+              drag and drop files
             </p>
             <p className="text-xs text-gray-500">
-              PNG, JPG, PDF, or text files up to 10MB
+              PNG, JPG, JPEG, WEBP, PDF, DOC, DOCX, TXT (up to 5 MB)
             </p>
           </div>
         </div>
@@ -177,52 +196,71 @@ export default function TicketForm({ onCreated }) {
               Selected Files ({attachments.length}):
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {attachments.map((att) => (
-                <div
-                  key={att.id}
-                  className="flex items-center justify-between rounded-lg border border-surface-border bg-surface-bg p-2.5"
-                >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    {att.previewUrl ? (
-                      <img
-                        src={att.previewUrl}
-                        alt={att.name}
-                        className="h-10 w-10 rounded object-cover border border-surface-border shrink-0"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-surface-card text-accent">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-gray-200">
-                        {att.name}
-                      </p>
-                      <p className="text-[11px] text-gray-500">
-                        {formatFileSize(att.size)}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeAttachment(att.id);
-                    }}
-                    className="p-1 text-gray-500 hover:text-red-400"
-                    title="Remove file"
+              {attachments.map((att) => {
+                const ext = att.name.includes(".")
+                  ? att.name.split(".").pop().toUpperCase()
+                  : "FILE";
+                const badgeStyle =
+                  ext === "PDF"
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : ext === "DOC" || ext === "DOCX"
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      : ext === "TXT"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        : "bg-surface-card text-gray-300 border-surface-border";
+                return (
+                  <div
+                    key={att.id}
+                    className="flex items-center justify-between rounded-xl border border-surface-border bg-surface-bg p-2.5 transition-colors hover:border-surface-border/80"
                   >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3 overflow-hidden min-w-0">
+                      {att.previewUrl ? (
+                        <img
+                          src={att.previewUrl}
+                          alt={att.name}
+                          className="h-10 w-10 rounded-lg object-cover border border-surface-border shrink-0 shadow-sm"
+                        />
+                      ) : (
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-bold text-[10px] tracking-wide ${badgeStyle}`}
+                        >
+                          {ext.slice(0, 4)}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-gray-200">
+                          {att.name}
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          {formatFileSize(att.size)}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeAttachment(att.id);
+                      }}
+                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-surface-card rounded-lg transition-colors"
+                      title="Remove file"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
 
       <div className="pt-2 flex justify-end">
-        <Button type="submit" loading={submitting} className="px-6 py-2.5 text-sm font-semibold">
+        <Button
+          type="submit"
+          loading={submitting}
+          className="px-6 py-2.5 text-sm font-semibold"
+        >
           Submit Ticket
         </Button>
       </div>

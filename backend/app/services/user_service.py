@@ -39,6 +39,23 @@ user_crud = CRUDBase(User)
 
 SUPER_ADMIN_EMAIL = "admin@test.com"
 
+def generate_temp_password(length: int = 16) -> str:
+    """Generates a temporary password meeting complexity requirements."""
+    if length < 4:
+        length = 4
+    specials = "!@#$%&*"
+    chars = [
+        secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ"),
+        secrets.choice("abcdefghijklmnopqrstuvwxyz"),
+        secrets.choice("23456789"),
+        secrets.choice(specials),
+    ]
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*"
+    chars += [secrets.choice(alphabet) for _ in range(length - 4)]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
 
 def is_super_admin(user: User) -> bool:
     """Checks whether a user is the root super admin."""
@@ -493,3 +510,24 @@ async def get_department_team_workflow(
         setattr(user_obj, "active_tickets_count", int(count or 0))
         members.append(DepartmentTeamMemberRead.model_validate(user_obj))
     return members
+
+async def list_users_workflow(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 100,
+    includes_archived: bool = False,
+) -> list[User]:
+    """Fetches non-superadmin users with archive filtering and pagination."""
+    query = select(User).where(User.email != SUPER_ADMIN_EMAIL)
+    if not includes_archived:
+        query = query.where(User.is_archive.is_(False))
+    result = await db.execute(query.offset(skip).limit(limit))
+    return result.scalars().all()
+
+
+async def get_user_workflow(user_id: UUID, db: AsyncSession) -> User:
+    """Fetches a user profile by ID, hiding super admin."""
+    obj = await user_crud.get(db, user_id)
+    if not obj or is_super_admin(obj):
+        raise HTTPException(404, "User not found")
+    return obj

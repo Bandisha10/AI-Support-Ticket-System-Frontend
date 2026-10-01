@@ -87,8 +87,19 @@ export default function CustomerTicketDetail() {
 
   useReplyRealtime(ticketId, handleNewReply);
 
+  // Check if at least one human support agent has posted a public reply
+  const hasAgentReplied = replies.some(
+    (r) => r.author_id !== ticket?.customer_id && !r.is_system_log,
+  );
   async function handleSendReply(e) {
     e.preventDefault();
+    if (!hasAgentReplied) {
+      showToast(
+        "Please wait for an agent to reply to your ticket first.",
+        "info",
+      );
+      return;
+    }
     if (!reply.trim()) return;
     setSending(true);
     try {
@@ -161,77 +172,14 @@ export default function CustomerTicketDetail() {
           {ticket.body_redacted || ticket.body || ticket.description}
         </div>
 
-        {/* Attachments if any */}
+        {/* Attachments Gallery */}
         {ticket.attachments && ticket.attachments.length > 0 && (
           <div className="mt-5 border-t border-surface-border pt-4">
             <p className="text-xs font-semibold text-gray-400 mb-3 flex items-center gap-1.5">
               <Paperclip className="h-3.5 w-3.5 text-accent" />
               <span>Attached Files ({ticket.attachments.length}):</span>
             </p>
-
-            {/* Visual Image Previews Gallery */}
-            {ticket.attachments.some((f) =>
-              isImageAttachment(f.name || f.filename, f.content_type),
-            ) && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-                {ticket.attachments
-                  .filter((file) =>
-                    isImageAttachment(
-                      file.name || file.filename,
-                      file.content_type,
-                    ),
-                  )
-                  .map((file, idx) => {
-                    const displayName =
-                      file.name || file.filename || `Image ${idx + 1}`;
-                    const fileUrl = getAttachmentUrl(file.url);
-                    const sizeLabel = file.size || file.size_formatted;
-
-                    return (
-                      <div
-                        key={file.id || idx}
-                        onClick={() =>
-                          setSelectedImage({
-                            url: fileUrl,
-                            name: displayName,
-                            size: sizeLabel,
-                          })
-                        }
-                        className="group relative cursor-pointer overflow-hidden rounded-xl border border-surface-border bg-surface-bg p-2 transition-all hover:border-accent hover:shadow-lg shadow-sm"
-                        title={`Click to preview ${displayName}`}
-                      >
-                        <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface-card flex items-center justify-center">
-                          <img
-                            src={fileUrl}
-                            alt={displayName}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-lg bg-black/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm shadow-md">
-                              <ZoomIn className="h-3.5 w-3.5 text-accent" />
-                              <span>Preview Image</span>
-                            </span>
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between px-1 text-xs">
-                          <span className="truncate font-medium text-gray-200">
-                            {displayName}
-                          </span>
-                          {sizeLabel && (
-                            <span className="text-[11px] text-gray-500 shrink-0 ml-2">
-                              {sizeLabel}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            )}
-
-            {/* Attachment File Pills */}
-            <div className="flex flex-wrap gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {ticket.attachments.map((file, idx) => {
                 const displayName =
                   file.name || file.filename || `Attachment ${idx + 1}`;
@@ -241,47 +189,91 @@ export default function CustomerTicketDetail() {
                 );
                 const fileUrl = getAttachmentUrl(file.url);
                 const sizeLabel = file.size || file.size_formatted;
-
-                return (
-                  <button
-                    key={file.id || idx}
-                    type="button"
-                    onClick={() => {
-                      if (isImage) {
+                const ext = displayName.includes(".")
+                  ? displayName.split(".").pop().toUpperCase()
+                  : "FILE";
+                if (isImage) {
+                  return (
+                    <div
+                      key={file.id || idx}
+                      onClick={() =>
                         setSelectedImage({
                           url: fileUrl,
                           name: displayName,
                           size: sizeLabel,
-                        });
-                      } else {
-                        window.open(fileUrl, "_blank", "noopener,noreferrer");
+                        })
                       }
-                    }}
-                    className="group inline-flex items-center gap-2 rounded-xl border border-surface-border bg-surface-bg/90 px-3 py-2 text-xs text-gray-300 transition-all hover:border-accent hover:bg-surface-bg hover:text-white shadow-sm cursor-pointer text-left"
-                    title={
-                      isImage
-                        ? `Preview ${displayName}`
-                        : `Download ${displayName}`
+                      className="group relative cursor-pointer overflow-hidden rounded-xl border border-surface-border bg-surface-bg p-2 transition-all hover:border-accent hover:shadow-lg shadow-sm"
+                      title={`Click to preview ${displayName}`}
+                    >
+                      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-surface-card flex items-center justify-center">
+                        <img
+                          src={fileUrl}
+                          alt={displayName}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          loading="lazy"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-black/75 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm shadow-md">
+                            <ZoomIn className="h-3.5 w-3.5 text-accent" />
+                            <span>Preview</span>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between px-1 text-xs">
+                        <span className="truncate font-medium text-gray-200">
+                          {displayName}
+                        </span>
+                        {sizeLabel && (
+                          <span className="text-[11px] text-gray-500 shrink-0 ml-2">
+                            {sizeLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                // Document / File Card with Color-Coded Badge
+                const badgeStyle =
+                  ext === "PDF"
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : ext === "DOC" || ext === "DOCX"
+                      ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                      : ext === "TXT"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                        : "bg-surface-card text-gray-300 border-surface-border";
+                return (
+                  <button
+                    key={file.id || idx}
+                    type="button"
+                    onClick={() =>
+                      setSelectedImage({
+                        url: fileUrl,
+                        name: displayName,
+                        size: sizeLabel,
+                      })
                     }
+                    className="group flex items-center justify-between gap-3 rounded-xl border border-surface-border bg-surface-bg p-3 transition-all hover:border-accent hover:bg-surface-bg/80 hover:shadow-md shadow-sm cursor-pointer text-left w-full"
+                    title={`Click to preview ${displayName}`}
                   >
-                    {isImage ? (
-                      <ImageIcon className="h-4 w-4 text-accent shrink-0 transition-transform group-hover:scale-110" />
-                    ) : (
-                      <FileText className="h-4 w-4 text-accent shrink-0 transition-transform group-hover:scale-110" />
-                    )}
-                    <span className="truncate max-w-[200px] font-medium">
-                      {displayName}
-                    </span>
-                    {sizeLabel && (
-                      <span className="text-[11px] text-gray-500">
-                        ({sizeLabel})
-                      </span>
-                    )}
-                    {isImage ? (
-                      <ZoomIn className="h-3.5 w-3.5 text-gray-500 transition-colors group-hover:text-accent shrink-0" />
-                    ) : (
-                      <ExternalLink className="h-3 w-3 text-gray-500 transition-colors group-hover:text-accent shrink-0" />
-                    )}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-bold text-[11px] tracking-wide ${badgeStyle}`}
+                      >
+                        {ext.slice(0, 4)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-gray-200 group-hover:text-accent transition-colors">
+                          {displayName}
+                        </p>
+                        {sizeLabel && (
+                          <p className="text-[11px] text-gray-500">
+                            {sizeLabel}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <ZoomIn className="h-4 w-4 text-gray-500 group-hover:text-accent shrink-0 transition-colors" />
                   </button>
                 );
               })}
@@ -339,17 +331,16 @@ export default function CustomerTicketDetail() {
             </h2>
             {!repliesLoading && (
               <span className="rounded-full border border-surface-border bg-surface-card px-2 py-0.5 text-[11px] font-semibold text-gray-400">
-                {replies.filter((r) => !r.is_internal_note).length}
+                {replies.filter((r) => !r.is_system_log).length}
               </span>
             )}
           </div>
         </div>
-
         {repliesLoading ? (
           <div className="flex justify-center py-8">
             <Loader />
           </div>
-        ) : replies.length === 0 ? (
+        ) : replies.filter((r) => !r.is_system_log).length === 0 ? (
           <div className="rounded-2xl border border-surface-border bg-surface-card/80 p-8 text-center backdrop-blur-sm shadow-sm">
             <p className="text-sm font-medium text-gray-300">No replies yet</p>
             <p className="mt-1 text-xs text-gray-500">
@@ -359,7 +350,7 @@ export default function CustomerTicketDetail() {
         ) : (
           <div className="space-y-4">
             {replies
-              .filter((r) => !r.is_internal_note)
+              .filter((r) => !r.is_system_log)
               .map((r) => {
                 const isCustomer =
                   r.author_id === ticket.customer_id || r.is_customer;
@@ -404,12 +395,6 @@ export default function CustomerTicketDetail() {
                               <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-400 border border-blue-500/20">
                                 <Headphones className="h-3 w-3" />
                                 <span>Support Staff</span>
-                              </span>
-                            )}
-                            {r.is_auto_reply && (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[11px] font-semibold text-purple-400 border border-purple-500/20">
-                                <Sparkles className="h-3 w-3" />
-                                <span>Auto-Reply</span>
                               </span>
                             )}
                           </div>
@@ -478,29 +463,45 @@ export default function CustomerTicketDetail() {
         )}
       </div>
 
-      {/* Reply box — active if ticket is open */}
+      {/* Reply Box or Awaiting Agent Banner */}
       {!isClosedOrResolved ? (
-        <form onSubmit={handleSendReply} className="mt-8">
-          <div className="w-full rounded-2xl border border-surface-border bg-surface-card p-6 space-y-4 shadow-sm">
-            <textarea
-              value={reply}
-              onChange={(e) => setReply(e.target.value)}
-              rows={3}
-              placeholder="Type your message or response here…"
-              className="w-full rounded-xl border border-surface-border bg-surface-bg p-4 text-sm text-gray-200 placeholder:text-gray-500 focus:border-accent focus:outline-none transition-colors"
-            />
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                loading={sending}
-                className="flex items-center gap-2 px-6 py-2.5 font-semibold text-xs"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>Send Reply</span>
-              </Button>
+        !hasAgentReplied ? (
+          <div className="mt-8 rounded-2xl border border-surface-border bg-surface-card/80 p-6 text-center backdrop-blur-sm shadow-sm">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 text-accent mb-3">
+              <Clock className="h-5 w-5" />
             </div>
+            <h3 className="text-sm font-semibold text-white">
+              Awaiting Agent Response
+            </h3>
+            <p className="mt-1 text-xs text-gray-400 max-w-md mx-auto">
+              Your ticket has been queued. You can reply once an assigned
+              support agent reviews your ticket and sends their initial
+              response.
+            </p>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSendReply} className="mt-8">
+            <div className="w-full rounded-2xl border border-surface-border bg-surface-card p-6 space-y-4 shadow-sm">
+              <textarea
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                rows={3}
+                placeholder="Type your response to the agent here…"
+                className="w-full rounded-xl border border-surface-border bg-surface-bg p-4 text-sm text-gray-200 placeholder:text-gray-500 focus:border-accent focus:outline-none transition-colors"
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  loading={sending}
+                  className="flex items-center gap-2 px-6 py-2.5 font-semibold text-xs"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Send Reply</span>
+                </Button>
+              </div>
+            </div>
+          </form>
+        )
       ) : null}
 
       <RatingModal

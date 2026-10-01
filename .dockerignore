@@ -10,3 +10,4 @@ __pycache__
 tickets_cleaned*.csv
 ai-support-ticket-system-github-handoff.zip
 frontend
+.agents/

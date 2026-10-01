@@ -1,5 +1,5 @@
 import string
-from backend.app.routers.users import generate_temp_password, is_super_admin, SUPER_ADMIN_EMAIL
+from backend.app.services.user_service import generate_temp_password, is_super_admin, SUPER_ADMIN_EMAIL
 from backend.app.models.user import User
 
 
@@ -9,7 +9,7 @@ def test_generate_temp_password():
     assert any(c in string.ascii_uppercase for c in pw)
     assert any(c in string.ascii_lowercase for c in pw)
     assert any(c in string.digits for c in pw)
-    assert any(c in "!@#$%^&*-_=+?" for c in pw)
+    assert any(c in "!@#$%^&*" for c in pw)
 
 
 def test_is_super_admin():
