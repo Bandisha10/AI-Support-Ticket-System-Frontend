@@ -23,7 +23,6 @@ function formatFileSize(bytes) {
 export default function ReplyBox({ ticketId, onSent }) {
   const { showToast } = useToast();
   const [message, setMessage] = useState("");
-  const [isInternal, setIsInternal] = useState(false);
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
 
@@ -79,7 +78,7 @@ export default function ReplyBox({ ticketId, onSent }) {
       const ext = "." + file.name.split(".").pop().toLowerCase();
       if (!ALLOWED_EXTENSIONS.includes(ext)) {
         showToast(
-          `"${file.name}" has an unsupported format. Allowed: PNG, JPG, WEBP, PDF, DOC, TXT`,
+          `"${file.name}" has an unsupported format. Allowed: PNG, JPG, JPEG, WEBP, PDF, DOC, DOCX, TXT`,
           "error",
         );
         continue;
@@ -133,9 +132,8 @@ export default function ReplyBox({ ticketId, onSent }) {
       }
 
       if (hasMessage) {
-        await ticketService.sendAgentReply(ticketId, message, isInternal);
+        await ticketService.sendAgentReply(ticketId, message);
       }
-
       // Cleanup preview URLs
       attachments.forEach((a) => {
         if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
@@ -145,19 +143,11 @@ export default function ReplyBox({ ticketId, onSent }) {
       setAttachments([]);
 
       if (hasMessage && hasAttachments) {
-        showToast(
-          isInternal
-            ? "Internal note & attachments added"
-            : "Reply & attachments sent to customer",
-          "success",
-        );
+        showToast("Reply & attachments sent to customer", "success");
       } else if (hasAttachments) {
         showToast("Attachments uploaded to ticket successfully", "success");
       } else {
-        showToast(
-          isInternal ? "Internal note added" : "Reply sent to customer",
-          "success",
-        );
+        showToast("Reply sent to customer", "success");
       }
 
       onSent?.();
@@ -284,66 +274,70 @@ export default function ReplyBox({ ticketId, onSent }) {
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         rows={4}
-        placeholder={
-          isInternal
-            ? "Write an internal note for your team (customer will not see this)…"
-            : "Write a reply to the customer or drag & drop files here…"
-        }
+        placeholder="Write a reply to the customer or drag & drop files here…"
         className="w-full rounded-xl border border-surface-border bg-surface-bg p-4 text-sm text-gray-200 placeholder:text-gray-500 focus:border-accent focus:outline-none transition-colors"
       />
 
       {/* Selected Attachments Preview */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
-          {attachments.map((att) => (
-            <div
-              key={att.id}
-              className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-bg px-2.5 py-1.5 text-xs"
-            >
-              {att.previewUrl ? (
-                <img
-                  src={att.previewUrl}
-                  alt={att.name}
-                  className="h-6 w-6 rounded object-cover"
-                />
-              ) : (
-                <FileText className="h-4 w-4 text-accent" />
-              )}
-              <span className="max-w-[150px] truncate text-gray-300 font-medium">
-                {att.name}
-              </span>
-              <span className="text-[10px] text-gray-500">
-                ({formatFileSize(att.size)})
-              </span>
-              <button
-                type="button"
-                onClick={() => removeAttachment(att.id)}
-                className="text-gray-500 hover:text-red-400"
+          {attachments.map((att) => {
+            const ext = att.name.includes(".")
+              ? att.name.split(".").pop().toUpperCase()
+              : "FILE";
+            const badgeStyle =
+              ext === "PDF"
+                ? "bg-red-500/10 text-red-400 border-red-500/20"
+                : ext === "DOC" || ext === "DOCX"
+                  ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                  : ext === "TXT"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : "bg-surface-card text-gray-300 border-surface-border";
+            return (
+              <div
+                key={att.id}
+                className="flex items-center gap-2 rounded-lg border border-surface-border bg-surface-bg px-2.5 py-1.5 text-xs shadow-sm"
               >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+                {att.previewUrl ? (
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    className="h-6 w-6 rounded object-cover border border-surface-border shrink-0"
+                  />
+                ) : (
+                  <span
+                    className={`flex h-5 px-1.5 items-center justify-center rounded border text-[9px] font-bold tracking-wider shrink-0 ${badgeStyle}`}
+                  >
+                    {ext.slice(0, 4)}
+                  </span>
+                )}
+                <span className="max-w-[160px] truncate text-gray-200 font-medium">
+                  {att.name}
+                </span>
+                <span className="text-[10px] text-gray-500 shrink-0">
+                  ({formatFileSize(att.size)})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(att.id)}
+                  className="text-gray-500 hover:text-red-400 transition-colors ml-0.5"
+                  title="Remove attachment"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-400 select-none">
-          <input
-            type="checkbox"
-            checked={isInternal}
-            onChange={(e) => setIsInternal(e.target.checked)}
-            className="rounded border-surface-border bg-surface-bg text-accent focus:ring-0"
-          />
-          <span>Internal note (staff only)</span>
-        </label>
-
+      <div className="flex justify-end pt-1">
         <Button
           onClick={handleSend}
           loading={sending}
           className="px-5 py-2 text-sm font-semibold"
         >
-          {isInternal ? "Add Note" : "Send Reply"}
+          Send Reply
         </Button>
       </div>
     </div>

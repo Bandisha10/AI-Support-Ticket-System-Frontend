@@ -259,7 +259,7 @@ export default function AgentTicketPanel() {
       await api.post("/replies/", {
         ticket_id: ticket.id,
         body: `Agent ${user.email} assigned ticket to themselves.`,
-        is_internal_note: true,
+        is_system_log: true,
       });
       refetch();
     } catch (err) {
@@ -278,7 +278,7 @@ export default function AgentTicketPanel() {
       await api.post("/replies/", {
         ticket_id: ticket.id,
         body: `Manager ${user.email} reassigned ticket to Admin Triage (Invalid Department).`,
-        is_internal_note: true,
+        is_system_log: true,
       });
       refetch();
     } catch (err) {

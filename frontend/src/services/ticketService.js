@@ -97,18 +97,19 @@ export async function updateTicketStatus(ticketId, status) {
 }
 
 // --- Reply Management (Unified) ---
-export async function createReply(ticketId, message, isInternal = false) {
+export async function createReply(ticketId, message) {
   const cleanId = normalizeUUID(ticketId);
   const { data } = await api.post("/replies/", {
     ticket_id: cleanId,
     body: message,
-    is_internal_note: Boolean(isInternal),
-    is_auto_reply: false,
+    is_system_log: false,
   });
   return data;
 }
-export const addCustomerReply = (ticketId, msg) => createReply(ticketId, msg, false);
-export const sendAgentReply = (ticketId, msg, isInternal = false) => createReply(ticketId, msg, isInternal);
+
+
+export const addCustomerReply = (ticketId, msg) => createReply(ticketId, msg);
+export const sendAgentReply = (ticketId, msg) => createReply(ticketId, msg);
 
 export async function getTicketReplies(ticketId) {
   const cleanId = normalizeUUID(ticketId);

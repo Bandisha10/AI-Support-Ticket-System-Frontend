@@ -37,6 +37,7 @@ import { formatRelativeTime, formatDateTime } from "../../utils/formatters";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "./Toast";
 import * as authService from "../../services/authService";
+import { formatIndianPhone } from "../../utils/phoneFormat";
 const ChangePassword = lazy(() => import("../../pages/ChangePassword"));
 import Logo from "./Logo";
 
@@ -68,16 +69,28 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
     phone_number: "",
   });
   const userMenuRef = useRef(null);
+  const phoneInputRef = useRef(null);
+
   // Sync edit form with current user profile
   useEffect(() => {
     if (user) {
       setEditForm({
         first_name: user.first_name || "",
         last_name: user.last_name || "",
-        phone_number: user.phone_number || "",
+        phone_number: user.phone_number
+          ? formatIndianPhone(user.phone_number) || user.phone_number
+          : "",
       });
     }
   }, [user, showUserPopup]);
+
+  function handlePhoneChange(e) {
+    setEditForm((prev) => ({
+      ...prev,
+      phone_number: formatIndianPhone(e.target.value),
+    }));
+  }
+
   // Copy email to clipboard with feedback
   async function handleCopyEmail(e) {
     e.stopPropagation();
@@ -91,9 +104,27 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
       showToast("Failed to copy email", "error");
     }
   }
+
   // Save profile changes (first_name, last_name, phone_number)
   async function handleSaveProfile(e) {
     e.preventDefault();
+
+    if (!editForm.first_name.trim() || !editForm.last_name.trim()) {
+      showToast("First name and last name are required", "error");
+      return;
+    }
+
+    // Validate 10-digit completeness if phone number is provided
+    if (editForm.phone_number && editForm.phone_number.trim()) {
+      const digits = editForm.phone_number
+        .replace(/\D/g, "")
+        .replace(/^91/, "");
+      if (digits.length > 0 && digits.length < 10) {
+        showToast("Please enter a valid 10-digit phone number", "error");
+        return;
+      }
+    }
+
     setSavingProfile(true);
     try {
       await authService.updateProfile({
@@ -106,6 +137,7 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
       showToast("Profile updated successfully!", "success");
     } catch (err) {
       const msg =
+        err?.response?.data?.detail?.[0]?.msg ||
         err?.response?.data?.detail ||
         err?.message ||
         "Failed to update profile";
@@ -651,15 +683,12 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                   <div className="relative">
                     <Phone className="h-3.5 w-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
+                      ref={phoneInputRef}
                       type="tel"
+                      placeholder="+91 98765 43210"
+                      maxLength={15}
                       value={editForm.phone_number}
-                      onChange={(e) =>
-                        setEditForm((prev) => ({
-                          ...prev,
-                          phone_number: e.target.value,
-                        }))
-                      }
-                      placeholder="+1 (555) 000-0000"
+                      onChange={handlePhoneChange}
                       className="w-full rounded-xl bg-[#0b0e16] border border-[#262c3e] pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#f2b705] transition-colors"
                     />
                   </div>
@@ -695,6 +724,23 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
               </form>
             ) : (
               <div className="py-4 space-y-3 text-xs">
+                {/* Assigned Department */}
+                {user?.department_name && (
+                  <div className="flex items-center justify-between gap-3 bg-[#0c0f17]/70 border border-[#202535] rounded-xl p-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Building2 className="h-4 w-4 text-[#f2b705] shrink-0" />
+                      <div className="min-w-0">
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 block">
+                          Department
+                        </span>
+                        <span className="text-gray-200 font-medium text-xs mt-0.5 block">
+                          {user.department_name}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Email Address */}
                 <div className="flex items-center justify-between gap-3 bg-[#0c0f17]/70 border border-[#202535] rounded-xl p-3">
                   <div className="flex items-center gap-3 min-w-0">
@@ -731,7 +777,10 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                         Phone Number
                       </span>
                       <span className="text-gray-200 font-medium text-xs mt-0.5 block">
-                        {user?.phone_number || (
+                        {user?.phone_number ? (
+                          formatIndianPhone(user.phone_number) ||
+                          user.phone_number
+                        ) : (
                           <span className="text-gray-500 italic">
                             Not provided
                           </span>
@@ -742,7 +791,10 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
                   {!user?.phone_number && (
                     <button
                       type="button"
-                      onClick={() => setIsEditingProfile(true)}
+                      onClick={() => {
+                        setIsEditingProfile(true);
+                        setTimeout(() => phoneInputRef.current?.focus(), 50);
+                      }}
                       className="text-xs text-[#f2b705] hover:underline font-semibold shrink-0 cursor-pointer"
                     >
                       + Add
