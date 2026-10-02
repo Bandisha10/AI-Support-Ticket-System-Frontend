@@ -5,17 +5,15 @@ import {
   BookOpen,
   X,
   FileText,
-  UploadCloud,
   ChevronDown,
 } from "lucide-react";
 import Button from "../common/Button";
 import { useToast } from "../common/Toast";
 import * as ticketService from "../../services/ticketService";
-
 function formatFileSize(bytes) {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const sizes = ["Bytes", "KB", "MB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
@@ -24,7 +22,6 @@ export default function ReplyBox({ ticketId, onSent }) {
   const { showToast } = useToast();
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
 
   // File Attachments State (Feature 2)
   const [attachments, setAttachments] = useState([]);
@@ -162,23 +159,6 @@ export default function ReplyBox({ ticketId, onSent }) {
     }
   }
 
-  async function handleSuggest() {
-    setSuggesting(true);
-    try {
-      const { suggestion } = await ticketService.getSuggestedReply(ticketId);
-      if (suggestion) {
-        setMessage(suggestion);
-        showToast("AI suggestion inserted", "success");
-      } else {
-        showToast("No AI suggestion returned for this ticket", "info");
-      }
-    } catch {
-      showToast("AI suggestion unavailable right now", "error");
-    } finally {
-      setSuggesting(false);
-    }
-  }
-
   return (
     <div
       onDragOver={(e) => {
@@ -257,17 +237,6 @@ export default function ReplyBox({ ticketId, onSent }) {
             }}
           />
         </div>
-
-        {/* AI Suggest Button */}
-        <Button
-          variant="secondary"
-          onClick={handleSuggest}
-          loading={suggesting}
-          className="flex items-center gap-1.5 px-3 py-1 text-xs"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-accent" />
-          <span>AI Suggest</span>
-        </Button>
       </div>
 
       <textarea
