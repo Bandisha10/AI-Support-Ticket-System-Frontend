@@ -231,14 +231,15 @@ async def refresh_session_workflow(
     """Refreshes an active session using the refresh token."""
     client = make_anon_client()
     try:
-        res = client.auth.refresh_session(refresh_token)
+        res = await run_in_threadpool(client.auth.refresh_session, refresh_token)
     except Exception:
         raise HTTPException(401, "Invalid or expired refresh token")
     finally:
         try:
-            client.auth.sign_out(options={"scope": "local"})
+            await run_in_threadpool(client.auth.sign_out, {"scope": "local"})
         except Exception:
             pass
+
 
     session = res.session
     user = res.user

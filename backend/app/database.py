@@ -22,8 +22,6 @@ engine = create_async_engine(
     pool_size=10,  # Base number of connections maintained in the pool
     max_overflow=20,  # Maximum additional temporary connections permitted during traffic spikes
     connect_args={
-        # Disabling prepared statement caching prevents 'prepared statement does not exist'
-        # errors when routing queries through PgBouncer in transaction pooling mode.
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     },

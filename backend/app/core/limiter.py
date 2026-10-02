@@ -1,6 +1,6 @@
 """
 Rate Limiter Configuration.
-Utilizes SlowAPI backed by Redis or an in-memory sliding window.
+Utilizes SlowAPI backed by in-memory sliding window.
 Rate limits are applied per client IP using 'get_remote_address'.
 """
 import os

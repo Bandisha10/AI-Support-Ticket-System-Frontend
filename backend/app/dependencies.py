@@ -118,7 +118,8 @@ async def get_token_claims(token: str = Depends(get_access_token)) -> dict:
     Translates security exceptions into structured HTTP 401 responses.
     """
     try:
-        return decode_supabase_jwt(token)
+        return await run_in_threadpool(decode_supabase_jwt, token)
+
     except TokenExpiredError:
         raise _unauthorized(
             "Access token has expired. Call POST /auth/refresh and retry."
