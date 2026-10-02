@@ -417,9 +417,13 @@ export default function AgentAnalytics() {
           </div>
           <div className="flex items-baseline gap-2 mt-2">
             <h2 className="text-[28px] font-bold text-[#f2b705]">
-              {csat ? `${csat}` : "—"}
+              {csat !== null && csat !== undefined
+                ? Number(csat).toFixed(1)
+                : "—"}
             </h2>
-            {csat && <span className="text-xs text-gray-400">/ 5.0</span>}
+            {csat !== null && csat !== undefined && (
+              <span className="text-xs text-gray-400">/ 5.0</span>
+            )}
           </div>
           <p className="text-[11px] text-gray-400 mt-1">
             Based on {data.sla_compliance?.ratings_count || 0} customer ratings

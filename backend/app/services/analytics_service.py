@@ -228,14 +228,16 @@ async def get_dashboard_analytics(
     dept_rows = (await db.execute(dept_query)).all()
     tickets_by_category = [{"name": r[0], "count": r[1]} for r in dept_rows]
 
-    # 4. CSAT (Average Rating)
+    # 4. CSAT (Average Rating & Count)
     csat_query = (
-        select(sa_func.avg(TicketRating.rating))
+        select(sa_func.avg(TicketRating.rating), sa_func.count(TicketRating.id))
         .select_from(TicketRating)
         .join(Ticket, TicketRating.ticket_id == Ticket.id)
         .where(*filters)
     )
-    csat_val = (await db.execute(csat_query)).scalar()
+    csat_res = (await db.execute(csat_query)).first()
+    csat_val = csat_res[0] if csat_res else None
+    csat_count = int(csat_res[1] or 0) if csat_res else 0
     csat = round(float(csat_val), 1) if csat_val is not None else None
 
     # 5. Agent Performance
@@ -424,7 +426,10 @@ async def get_dashboard_analytics(
         "open_count": open_count,
         "in_progress_count": in_progress_count,
         "pending_count": pending_count,
-        "sla_compliance": {"csat": csat},
+        "sla_compliance": {
+            "csat": csat,
+            "ratings_count": csat_count,
+        },
         "tickets_by_category": tickets_by_category,
         "tickets_by_status": tickets_by_status,
         "tickets_by_priority": tickets_by_priority,
