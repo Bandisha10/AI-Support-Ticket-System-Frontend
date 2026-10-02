@@ -26,22 +26,6 @@ export default function TicketStatus({ ticket }) {
         <p className="mt-2 line-clamp-2 text-sm text-gray-500">{ticket.last_message}</p>
       )}
 
-      {(ticket.status === "resolved" || ticket.status === "closed") && (
-        <div className="mt-4 pt-4 border-t border-surface-border">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsRatingModalOpen(true);
-            }}
-            className="text-sm font-medium text-accent hover:underline transition-colors cursor-pointer"
-          >
-            ★ Rate this ticket
-          </button>
-        </div>
-      )}
-
       <RatingModal
         ticket={ticket}
         isOpen={isRatingModalOpen}
