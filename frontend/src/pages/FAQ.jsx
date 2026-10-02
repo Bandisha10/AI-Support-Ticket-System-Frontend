@@ -4,12 +4,12 @@ import {
   Search,
   ChevronDown,
   HelpCircle,
-  ArrowLeft,
-  MessageSquare,
   LifeBuoy,
   Sparkles,
 } from "lucide-react";
 import Logo from "../components/common/Logo";
+import Layout from "../components/common/Layout";
+import Loader from "../components/common/Loader";
 import { useAuth } from "../hooks/useAuth";
 
 const FAQ_ITEMS = [
@@ -65,7 +65,7 @@ const FAQ_ITEMS = [
 ];
 
 export default function FAQ() {
-  const { user, homeRoute } = useAuth();
+  const { user, loading, homeRoute } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [openItems, setOpenItems] = useState({});
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -92,45 +92,14 @@ export default function FAQ() {
     setOpenItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  return (
-    <div className="min-h-screen bg-surface-bg text-white">
-      {/* Header Bar */}
-      <header className="border-b border-surface-border bg-surface-card px-4 sm:px-6 py-4">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-          <Link to="/" className="flex items-center gap-2.5">
-            <Logo size={28} />
-            <span className="text-base sm:text-lg font-bold text-white">
-              Desk<span className="text-accent">wise</span> Support
-            </span>
-          </Link>
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            {user ? (
-              <Link
-                to={homeRoute || "/tickets"}
-                className="text-xs font-semibold text-gray-300 hover:text-white transition-colors"
-              >
-                Back to Dashboard
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="text-xs font-semibold text-gray-300 hover:text-white transition-colors"
-              >
-                Sign In
-              </Link>
-            )}
-            <Link
-              to="/tickets/new"
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-black hover:bg-accent-hover transition-colors"
-            >
-              Submit a Ticket
-            </Link>
-          </div>
-        </div>
-      </header>
+  if (loading) {
+    return <Loader fullScreen />;
+  }
 
+  const faqContent = (
+    <>
       {/* Hero Search Section */}
-      <section className="border-b border-surface-border bg-gradient-to-b from-surface-card to-surface-bg px-4 py-16 text-center">
+      <section className="border-b border-surface-border bg-gradient-to-b from-surface-card to-surface-bg px-4 py-12 sm:py-16 text-center">
         <div className="mx-auto max-w-2xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent mb-4">
             <Sparkles className="h-3.5 w-3.5" />
@@ -158,14 +127,14 @@ export default function FAQ() {
         </div>
       </section>
 
-      {/* Category Pills */}
+      {/* Category Pills & FAQ Accordions */}
       <main className="mx-auto max-w-4xl px-4 py-10">
         <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
                 selectedCategory === cat
                   ? "bg-accent text-black font-semibold"
                   : "border border-surface-border bg-surface-card text-gray-300 hover:border-accent hover:text-white"
@@ -198,7 +167,7 @@ export default function FAQ() {
                 >
                   <button
                     onClick={() => toggleItem(faq.id)}
-                    className="flex w-full items-start justify-between p-4 sm:p-5 text-left transition-colors gap-3"
+                    className="flex w-full items-start justify-between p-4 sm:p-5 text-left transition-colors gap-3 cursor-pointer"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 min-w-0">
                       <span className="text-xs font-medium text-accent shrink-0">
@@ -242,17 +211,62 @@ export default function FAQ() {
             to="/tickets/new"
             className="mt-4 sm:mt-0 shrink-0 inline-block"
           >
-            <button className="rounded-xl bg-accent px-5 py-2.5 text-xs font-bold text-black hover:bg-accent-hover transition-colors shadow-lg">
+            <button className="rounded-xl bg-accent px-5 py-2.5 text-xs font-bold text-black hover:bg-accent-hover transition-colors shadow-lg cursor-pointer">
               Submit a Ticket →
             </button>
           </Link>
         </div>
       </main>
+    </>
+  );
+
+  // Authenticated View: wrapped in standard Layout with full Sidebar navigation
+  if (user) {
+    return (
+      <Layout>
+        <div className="min-h-full bg-surface-bg text-white pb-12">
+          {faqContent}
+        </div>
+      </Layout>
+    );
+  }
+
+  // Public / Logged-out View: standalone layout with header and footer
+  return (
+    <div className="min-h-screen bg-surface-bg text-white">
+      {/* Header Bar */}
+      <header className="border-b border-surface-border bg-surface-card px-4 sm:px-6 py-4">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
+          <Link to="/" className="flex items-center gap-2.5">
+            <Logo size={28} />
+            <span className="text-base sm:text-lg font-bold text-white">
+              Desk<span className="text-accent">wise</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <Link
+              to="/login"
+              className="text-xs font-semibold text-gray-300 hover:text-white transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              to="/tickets/new"
+              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-black hover:bg-accent-hover transition-colors"
+            >
+              Submit a Ticket
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {faqContent}
+
       {/* Footer */}
       <footer className="mt-16 border-t border-surface-border bg-surface-card/40 py-6 text-center text-xs text-gray-500">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 sm:flex-row">
           <p>
-            © {new Date().getFullYear()} Deskwise Support System. All rights
+            © {new Date().getFullYear()} Deskwise System. All rights
             reserved.
           </p>
           <div className="flex items-center gap-4">
@@ -261,9 +275,6 @@ export default function FAQ() {
               className="text-accent hover:underline"
             >
               Terms & Conditions
-            </Link>
-            <Link to="/faq" className="hover:text-accent transition-colors">
-              Knowledge Base
             </Link>
           </div>
         </div>

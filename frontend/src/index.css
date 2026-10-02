@@ -18,6 +18,23 @@ body {
   @apply text-gray-400 opacity-80;
 }
 
+/* Dark Mode Autofill / Windows Security & Browser Password Manager Fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #0b0d13 inset !important;
+  -webkit-text-fill-color: #f3f4f6 !important;
+  caret-color: #f3f4f6 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+input:autofill {
+  background-color: #0b0d13 !important;
+  color: #f3f4f6 !important;
+}
+
+
 /* Custom smooth dark scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
