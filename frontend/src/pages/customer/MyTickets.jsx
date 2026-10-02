@@ -40,10 +40,17 @@ export default function MyTickets() {
     setCurrentPage(1);
   }, [debouncedSearch, statusFilter, tickets]);
 
+  // Only active tickets (exclude resolved & closed — those go to History)
+  const activeTickets = useMemo(() => {
+    if (!tickets) return [];
+    return tickets.filter(
+      (t) => !["resolved", "closed"].includes(t.status?.toLowerCase()),
+    );
+  }, [tickets]);
+
   // Client-side filtering
   const filteredTickets = useMemo(() => {
-    if (!tickets) return [];
-    return tickets.filter((t) => {
+    return activeTickets.filter((t) => {
       const matchSearch =
         !debouncedSearch.trim() ||
         t.subject?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
@@ -58,7 +65,7 @@ export default function MyTickets() {
 
       return matchSearch && matchStatus;
     });
-  }, [tickets, debouncedSearch, statusFilter]);
+  }, [activeTickets, debouncedSearch, statusFilter]);
 
   // Pagination Calculations
   const totalItems = filteredTickets.length;
@@ -80,7 +87,14 @@ export default function MyTickets() {
       return [1, 2, 3, 4, "...", totalPages];
     }
     if (safePage >= totalPages - 2) {
-      return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+      return [
+        1,
+        "...",
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
     }
     return [1, "...", safePage - 1, safePage, safePage + 1, "...", totalPages];
   };
@@ -166,8 +180,6 @@ export default function MyTickets() {
               <option value="open">Open</option>
               <option value="in_progress">In Progress</option>
               <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
             </select>
             <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           </div>
@@ -177,7 +189,7 @@ export default function MyTickets() {
         {(debouncedSearch || statusFilter !== "all") && (
           <div className="mt-3 flex items-center justify-between border-t border-surface-border/60 pt-2 text-xs text-gray-400">
             <span>
-              Showing {filteredTickets.length} of {tickets.length} tickets
+              Showing {filteredTickets.length} of {activeTickets.length} tickets
             </span>
             <button
               onClick={() => {
@@ -199,7 +211,7 @@ export default function MyTickets() {
         </div>
       )}
 
-      {!error && tickets.length === 0 && (
+      {!error && activeTickets.length === 0 && (
         <div className="rounded-2xl border border-surface-border bg-surface-card p-12 text-center">
           <p className="text-base font-medium text-gray-300">No tickets yet</p>
           <p className="mt-1 text-sm text-gray-500">
@@ -211,7 +223,7 @@ export default function MyTickets() {
         </div>
       )}
 
-      {!error && tickets.length > 0 && filteredTickets.length === 0 && (
+      {!error && activeTickets.length > 0 && filteredTickets.length === 0 && (
         <div className="rounded-xl border border-surface-border bg-surface-card p-8 text-center text-sm text-gray-500">
           No tickets matched your filter criteria.
         </div>
@@ -235,8 +247,8 @@ export default function MyTickets() {
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 mt-6 border-t border-surface-border text-xs text-gray-400">
           <div className="flex flex-wrap items-center gap-3">
             <span>
-              Showing <strong className="text-white">{startIndex + 1}</strong> to{" "}
-              <strong className="text-white">{endIndex}</strong> of{" "}
+              Showing <strong className="text-white">{startIndex + 1}</strong>{" "}
+              to <strong className="text-white">{endIndex}</strong> of{" "}
               <strong className="text-white">{totalItems}</strong> tickets
             </span>
             <div className="flex items-center gap-1.5 ml-1">
@@ -280,7 +292,10 @@ export default function MyTickets() {
               <div className="flex items-center gap-1 px-1">
                 {getPageNumbers().map((item, idx) =>
                   item === "..." ? (
-                    <span key={`ellipsis-${idx}`} className="px-1 text-gray-500">
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="px-1 text-gray-500"
+                    >
                       ...
                     </span>
                   ) : (
@@ -302,7 +317,9 @@ export default function MyTickets() {
 
               <button
                 type="button"
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
                 disabled={safePage === totalPages}
                 className="p-1.5 rounded-lg border border-surface-border bg-surface-card text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Next Page"
