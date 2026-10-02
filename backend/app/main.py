@@ -8,6 +8,7 @@ import math
 import time
 from contextlib import asynccontextmanager
 
+from fastapi import APIRouter
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -149,7 +150,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     # Automatically permit Vercel preview environments
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"^https:\/\/deskwise(-[a-zA-Z0-9_-]+)?\.vercel\.app$",
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=[
@@ -163,14 +164,27 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# API Router Registrations
+# API v1 Router Registration
 # ---------------------------------------------------------------------------
-app.include_router(auth.router)
-app.include_router(departments.router)
-app.include_router(users.router)
-app.include_router(tickets.router)
-app.include_router(sla_policies.router)
-app.include_router(replies.router)
+api_v1 = APIRouter(prefix="/api/v1")
+api_v1.include_router(auth.router)
+api_v1.include_router(departments.router)
+api_v1.include_router(users.router)
+api_v1.include_router(tickets.router)
+api_v1.include_router(sla_policies.router)
+api_v1.include_router(replies.router)
+
+# Mount primary versioned API
+app.include_router(api_v1)
+
+# Backward Compatibility: Mount legacy unversioned routes hidden from Swagger docs
+app.include_router(auth.router, include_in_schema=False)
+app.include_router(departments.router, include_in_schema=False)
+app.include_router(users.router, include_in_schema=False)
+app.include_router(tickets.router, include_in_schema=False)
+app.include_router(sla_policies.router, include_in_schema=False)
+app.include_router(replies.router, include_in_schema=False)
+
 
 
 @app.get("/health", tags=["Health"])
@@ -179,8 +193,8 @@ async def health():
     return {"status": "ok"}
 
 
-@app.get("/sentry-debug", tags=["Health"])
-async def trigger_sentry_test():
-    """Diagnostic endpoint to verify end-to-end Sentry exception capture."""
-    division_by_zero = 1 / 0
-    return {"result": division_by_zero}
+if settings.DEBUG:
+    @app.get("/sentry-debug", tags=["Health"])
+    async def trigger_sentry_test():
+        """Diagnostic endpoint to verify end-to-end Sentry exception capture."""
+        return {"result": 1 / 0}

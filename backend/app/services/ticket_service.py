@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -81,10 +81,11 @@ async def create_ticket_workflow(
     current_user: User,
 ) -> TicketRead:
     """Classifies ticket, assigns manager if high risk, creates SLA state, and notifies."""
-    # 1. AI Classification
+    # 1. AI Classification offloaded to worker thread
     try:
-        ai_result = classify_ticket(payload.subject, payload.body)
+        ai_result = await run_in_threadpool(classify_ticket, payload.subject, payload.body)
     except Exception as exc:
+
         logger.warning("Classification error during ticket creation: %s", exc)
         ai_result = {
             "body_redacted": payload.body,
@@ -174,7 +175,7 @@ async def create_ticket_workflow(
     ).scalar_one_or_none()
 
     if sla_policy:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         sla_state = SLAState(
             ticket_id=ticket.id,
             sla_policy_id=sla_policy.id,
@@ -481,7 +482,7 @@ async def list_tickets_workflow(
     )
 
     if sla_status:
-        now_dt = datetime.now(timezone.utc) if hasattr(timezone, "utc") else datetime.utcnow()
+        now_dt = datetime.now(timezone.utc)
         query = query.where(
             Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed])
         )
@@ -558,8 +559,8 @@ async def list_tickets_workflow(
         try:
             clean_date = created_at.strip().split("T")[0]
             dt = datetime.fromisoformat(clean_date)
-            start_of_day = datetime.combine(dt.date(), time.min)
-            end_of_day = datetime.combine(dt.date(), time.max)
+            start_of_day = datetime.combine(dt.date(), time.min, tzinfo=timezone.utc)
+            end_of_day = datetime.combine(dt.date(), time.max, tzinfo=timezone.utc)
             query = query.where(
                 Ticket.created_at >= start_of_day,
                 Ticket.created_at <= end_of_day,
@@ -567,10 +568,10 @@ async def list_tickets_workflow(
         except Exception as exc:
             logger.warning("Invalid created_at parameter '%s': %s", created_at, exc)
     elif date_range or start_date or end_date:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if date_range == "today":
-            start_of_today = datetime.combine(now.date(), time.min)
-            end_of_today = datetime.combine(now.date(), time.max)
+            start_of_today = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
+            end_of_today = datetime.combine(now.date(), time.max, tzinfo=timezone.utc)
             query = query.where(
                 Ticket.created_at >= start_of_today,
                 Ticket.created_at <= end_of_today,
@@ -585,7 +586,8 @@ async def list_tickets_workflow(
                     s_clean = start_date.strip().split("T")[0]
                     s_dt = datetime.fromisoformat(s_clean)
                     query = query.where(
-                        Ticket.created_at >= datetime.combine(s_dt.date(), time.min)
+                        Ticket.created_at
+                        >= datetime.combine(s_dt.date(), time.min, tzinfo=timezone.utc)
                     )
                 except Exception as exc:
                     logger.warning("Invalid start_date '%s': %s", start_date, exc)
@@ -594,7 +596,8 @@ async def list_tickets_workflow(
                     e_clean = end_date.strip().split("T")[0]
                     e_dt = datetime.fromisoformat(e_clean)
                     query = query.where(
-                        Ticket.created_at <= datetime.combine(e_dt.date(), time.max)
+                        Ticket.created_at
+                        <= datetime.combine(e_dt.date(), time.max, tzinfo=timezone.utc)
                     )
                 except Exception as exc:
                     logger.warning("Invalid end_date '%s': %s", end_date, exc)

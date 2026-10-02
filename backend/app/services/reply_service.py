@@ -83,16 +83,28 @@ async def get_replies_for_ticket(
     db: AsyncSession,
     current_user: User,
 ) -> list[ReplyRead]:
-    """Retrieves all replies for a ticket, automatically hiding internal notes from customers."""
+    """Retrieves all replies for a ticket, strictly enforcing ownership and masking internal notes."""
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket not found")
+    if current_user.role == UserRole.customer:
+        if ticket.customer_id != current_user.id:
+            raise HTTPException(403, "Not authorized to access replies for this ticket")
+    elif current_user.role == UserRole.agent:
+        is_in_dept = (
+            ticket.department_id is None
+            or current_user.department_id is None
+            or ticket.department_id == current_user.department_id
+        )
+        if not is_in_dept and ticket.assigned_agent_id != current_user.id:
+            raise HTTPException(403, "Not allowed to view replies outside your department")
     query = (
         select(Reply, User.email.label("author_email"))
         .outerjoin(User, Reply.author_id == User.id)
         .where(Reply.ticket_id == ticket_id)
     )
-
     if current_user.role == UserRole.customer:
         query = query.where(Reply.is_system_log.is_(False))
-
     query = query.order_by(Reply.created_at)
     result = await db.execute(query)
     rows = result.all()

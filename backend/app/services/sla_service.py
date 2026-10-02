@@ -37,6 +37,7 @@ async def check_and_warn_at_risk_slas(db: AsyncSession) -> int:
             Ticket.status.notin_([TicketStatus.resolved, TicketStatus.closed]),
             (SLAState.escalated_at.is_(None)) | (SLAState.breached.is_(False)),
         )
+        .with_for_update(of=SLAState, skip_locked=True)
     )
 
     result = await db.execute(query)
@@ -85,7 +86,7 @@ async def check_and_warn_at_risk_slas(db: AsyncSession) -> int:
             else "Unassigned"
         )
         target_mgr_text = f"Department Manager ({manager.email})" if manager else "Department (No Active Manager)"
-        author_id = manager.id if manager else (assigned_agent.id if assigned_agent else ticket.customer_id)
+        author_id = manager.id if manager else (assigned_agent.id if assigned_agent else None)
 
         # -------------------------------------------------------------
         # STAGE 2: CRITICAL SLA BREACH VIOLATION (100% Deadline Elapsed)

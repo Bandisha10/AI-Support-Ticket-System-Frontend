@@ -1,10 +1,13 @@
 import axios from "axios";
 
+const rawBaseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const baseURL = rawBaseURL.endsWith("/api/v1") ? rawBaseURL : `${rawBaseURL.replace(/\/+$/, "")}/api/v1`;
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
+  baseURL,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });
+
 
 // Auth endpoints legitimately answer 401 for bad credentials — a hard redirect
 // there would wipe the page before the error toast could render.

@@ -28,12 +28,7 @@ export async function createTicket(payload, attachments = []) {
       }
       const { data: uploadedFiles } = await api.post(
         `/tickets/${ticket.id}/attachments`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
+        formData
       );
       ticket.attachments = uploadedFiles;
     } catch (err) {

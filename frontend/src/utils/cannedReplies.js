@@ -1,5 +1,3 @@
-// frontend/src/utils/cannedReplies.js
-
 export const CANNED_REPLIES = [
   {
     id: "greeting",
