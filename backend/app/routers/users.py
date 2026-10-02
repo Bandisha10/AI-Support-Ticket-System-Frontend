@@ -6,7 +6,6 @@ import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_db
@@ -22,8 +21,6 @@ from backend.app.schemas.user import (
     UserUpdate,
 )
 from backend.app.services import user_service
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

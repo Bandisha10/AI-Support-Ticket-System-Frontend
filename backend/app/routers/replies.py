@@ -4,13 +4,12 @@ Delegates authorization and reply creation to reply_service.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.enums import UserRole
-from backend.app.models.reply import Reply
 from backend.app.models.user import User
 from backend.app.schemas.reply import ReplyCreate, ReplyRead
 from backend.app.services import reply_service

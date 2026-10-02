@@ -3,24 +3,20 @@ Tickets Router.
 Dispatches requests to ticket_service, analytics_service, and storage_service.
 """
 import logging
-from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.limiter import limiter
 from backend.app.database import get_db
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.enums import (
     TicketPriority,
-    TicketSentiment,
     TicketStatus,
     UserRole,
 )
-from backend.app.models.sla_state import SLAState
 from backend.app.models.ticket import Ticket
-from backend.app.models.ticket_rating import TicketRating
 from backend.app.models.user import User
 from backend.app.schemas.ticket import (
     AttachmentRead,
@@ -33,7 +29,6 @@ from backend.app.services import analytics_service, storage_service, ticket_serv
 from backend.app.services.storage_service import (
     get_ticket_attachments as _get_ticket_attachments,
 )
-from backend.app.services.ticket_service import ticket_to_read as _ticket_to_read
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +36,14 @@ router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
 
 @router.post("/", response_model=TicketRead, status_code=201)
+@limiter.limit("15/minute")
 async def create_ticket(
+    request: Request,
     payload: TicketCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
     return await ticket_service.create_ticket_workflow(payload, db, current_user)
 
 
@@ -141,12 +139,10 @@ async def rate_ticket(
     return await ticket_service.rate_ticket_workflow(ticket_id, payload, db, current_user)
 
 
-@router.post(
-    "/{ticket_id}/attachments",
-    response_model=list[AttachmentRead],
-    status_code=201,
-)
+@router.post("/{ticket_id}/attachments", response_model=list[AttachmentRead])
+@limiter.limit("10/minute")
 async def upload_attachments(
+    request: Request,
     ticket_id: UUID,
     files: list[UploadFile] = File(...),
     db: AsyncSession = Depends(get_db),
@@ -163,7 +159,7 @@ async def list_ticket_attachments(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ticket = await crud.get(db, ticket_id)
+    ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(404, "Ticket not found")
     if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
