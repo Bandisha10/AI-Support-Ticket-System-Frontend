@@ -3,7 +3,7 @@ Analytics & Reporting Service.
 Aggregates ticket status, department distributions, CSAT satisfaction, agent performance,
 and trend metrics with in-memory caching.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from cachetools import TTLCache
@@ -30,7 +30,7 @@ def build_date_filters(
 ) -> list:
     """Builds SQL date filtering criteria from query parameters."""
     filters = list(base_filters) if base_filters else []
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     if date_range == "week":
         filters.append(Ticket.created_at >= now - timedelta(days=7))
     elif date_range == "month":
@@ -41,7 +41,7 @@ def build_date_filters(
                 s_dt = datetime.fromisoformat(start_date.replace("Z", ""))
                 filters.append(
                     Ticket.created_at
-                    >= datetime(s_dt.year, s_dt.month, s_dt.day, 0, 0, 0)
+                    >= datetime(s_dt.year, s_dt.month, s_dt.day, 0, 0, 0, tzinfo=timezone.utc)
                 )
             except Exception:
                 pass
@@ -50,7 +50,7 @@ def build_date_filters(
                 e_dt = datetime.fromisoformat(end_date.replace("Z", ""))
                 filters.append(
                     Ticket.created_at
-                    <= datetime(e_dt.year, e_dt.month, e_dt.day, 23, 59, 59)
+                    <= datetime(e_dt.year, e_dt.month, e_dt.day, 23, 59, 59, tzinfo=timezone.utc)
                 )
             except Exception:
                 pass
@@ -135,7 +135,7 @@ async def get_dashboard_analytics(
     if cache_key in analytics_cache:
         return analytics_cache[cache_key]
 
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     five_days_ago = now - timedelta(days=5)
     ten_days_ago = now - timedelta(days=10)
 
