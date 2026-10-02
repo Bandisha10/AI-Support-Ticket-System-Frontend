@@ -1,6 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Search, Filter, HelpCircle, Plus } from "lucide-react";
+import {
+  Search,
+  Filter,
+  HelpCircle,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
 import TicketStatus from "../../components/customer/TicketStatus";
 import Loader from "../../components/common/Loader";
@@ -14,6 +23,10 @@ export default function MyTickets() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   // Debounce search input by 300ms
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -21,6 +34,11 @@ export default function MyTickets() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Reset to first page when search, filter, or ticket dataset changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, tickets]);
 
   // Client-side filtering
   const filteredTickets = useMemo(() => {
@@ -41,6 +59,31 @@ export default function MyTickets() {
       return matchSearch && matchStatus;
     });
   }, [tickets, debouncedSearch, statusFilter]);
+
+  // Pagination Calculations
+  const totalItems = filteredTickets.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  const paginatedTickets = useMemo(() => {
+    return filteredTickets.slice(startIndex, endIndex);
+  }, [filteredTickets, startIndex, endIndex]);
+
+  const getPageNumbers = () => {
+    if (totalPages <= 5) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    if (safePage <= 3) {
+      return [1, 2, 3, 4, "...", totalPages];
+    }
+    if (safePage >= totalPages - 2) {
+      return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    }
+    return [1, "...", safePage - 1, safePage, safePage + 1, "...", totalPages];
+  };
 
   if (loading) return <Loader fullScreen />;
 
@@ -72,6 +115,7 @@ export default function MyTickets() {
           </Link>
         </div>
       </div>
+
       {/* FAQ Callout Banner */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-surface-border bg-surface-card/60 p-4 backdrop-blur-sm">
         <div className="flex items-center gap-3 min-w-0">
@@ -173,8 +217,9 @@ export default function MyTickets() {
         </div>
       )}
 
+      {/* Paginated Ticket Cards */}
       <div className="space-y-3">
-        {filteredTickets.map((t) => (
+        {paginatedTickets.map((t) => (
           <Link
             key={t.id}
             to={`/tickets/${t.id}`}
@@ -184,6 +229,99 @@ export default function MyTickets() {
           </Link>
         ))}
       </div>
+
+      {/* Pagination Controls */}
+      {totalItems > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-6 mt-6 border-t border-surface-border text-xs text-gray-400">
+          <div className="flex flex-wrap items-center gap-3">
+            <span>
+              Showing <strong className="text-white">{startIndex + 1}</strong> to{" "}
+              <strong className="text-white">{endIndex}</strong> of{" "}
+              <strong className="text-white">{totalItems}</strong> tickets
+            </span>
+            <div className="flex items-center gap-1.5 ml-1">
+              <span>Per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="rounded-lg border border-surface-border bg-surface-bg px-2 py-1 text-xs text-gray-200 focus:border-accent focus:outline-none"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={safePage === 1}
+                className="p-1.5 rounded-lg border border-surface-border bg-surface-card text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="First Page"
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="p-1.5 rounded-lg border border-surface-border bg-surface-card text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-1 px-1">
+                {getPageNumbers().map((item, idx) =>
+                  item === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="px-1 text-gray-500">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setCurrentPage(item)}
+                      className={`min-w-[28px] h-7 px-2 rounded-lg text-xs font-semibold transition-colors ${
+                        safePage === item
+                          ? "bg-accent text-black shadow-sm"
+                          : "border border-surface-border bg-surface-card text-gray-300 hover:border-accent hover:text-white"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="p-1.5 rounded-lg border border-surface-border bg-surface-card text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={safePage === totalPages}
+                className="p-1.5 rounded-lg border border-surface-border bg-surface-card text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Last Page"
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
