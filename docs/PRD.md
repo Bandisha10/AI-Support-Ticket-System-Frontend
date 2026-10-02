@@ -6,7 +6,7 @@
 | Property | Details |
 |---|---|
 | Product Name | Deskwise |
-| Version | 2.1.0 |
+| Version | 1.0.0 |
 | Status | Production-Hardened |
 | Platform | Web (Desktop & Mobile-Responsive) |
 | Stack | FastAPI Backend + React (Vite) Frontend + Supabase PostgreSQL |
@@ -19,10 +19,10 @@
 Support teams face high ticket volumes causing triage delays, misrouted tickets, and missed SLAs. Sending raw customer text (often containing PII) to external LLM APIs also creates compliance and privacy risk.
 
 ### 1.2 Vision
-Deskwise is a privacy-first support platform combining **local quantized NLP inference (ONNX Runtime)** with **deterministic business rules (PostgreSQL)**. PII is redacted before inference, classification runs in under 100ms using <512MB RAM, and routing/SLA logic is fully deterministic — enabling fast resolution without compromising data security.
+Deskwise is a privacy-first support platform combining **local quantized NLP inference (ONNX Runtime)** with **deterministic business rules (PostgreSQL)**. PII is redacted before inference, classification runs in under 100ms using <512MB RAM, models are preloaded at startup for zero cold-start latency, and routing/SLA logic is fully deterministic — enabling fast resolution without compromising data security.
 
 ### 1.3 Core Architectural Invariants
-1. **In-process AI inference** — CPU-quantized ONNX models loaded on-demand; no PyTorch dependency (keeps memory < 512MB).
+1. **In-process AI inference** — CPU-quantized ONNX models preloaded at startup; no PyTorch dependency (keeps memory < 512MB).
 2. **Strict AI vs. deterministic boundary**:
    - AI-driven: PII redaction, department/priority/sentiment classification.
    - Deterministic: department routing (SQL lookup), SLA timers (arithmetic), RBAC.
@@ -49,7 +49,7 @@ Deskwise is a privacy-first support platform combining **local quantized NLP inf
 
 **Backend (FastAPI):**
 - Security layer: CORS, security headers, rate limiting, dual JWT verification.
-- Service layer: `ticket_service`, `auth_service`, `analytics_service`, `reply_service`, `storage_service`, `user_service`.
+- Service layer: `ticket_service`, `auth_service`, `analytics_service`, `reply_service`, `storage_service`, `user_service`, `manager_service`, `sla_service`.
 - AI pipeline: PII sanitization → ONNX inference → deterministic routing/SLA → high-risk escalation.
 - Background workers: SLA poller (60s loop), mailer (Brevo API + SMTP fallback).
 
@@ -109,7 +109,7 @@ Communication: Client ↔ Backend via HTTPS/Axios (dual JWT interceptors); Backe
 ### 5.1 ONNX Model Architecture
 - Runtime: `onnxruntime` (CPU execution provider, `intra_op_num_threads = 1`)
 - Quantization: INT8 (`model_quantized.onnx`, ~60MB/model)
-- Memory: lazy on-demand loading; startup RAM < 250MB, peak inference < 500MB
+- Memory: models preloaded at startup via `preload_models()`; peak inference < 500MB
 - Models (Hugging Face):
   - Department: `pratik14212/deskwise-departments` (7 classes)
   - Priority: `pratik14212/deskwise-priorities` (low/medium/high)
@@ -140,8 +140,15 @@ Visit api doc: https://ai-based-customer-support-ticket-system.onrender.com/docs
 ### 7.2 Performance
 - Peak container memory < 512MB.
 - Inference latency < 100ms per classification (quantized ONNX, CPU).
-- Instant boot via on-demand model loading (no startup timeout).
+- Models preloaded at startup for zero cold-start inference lag.
 
 ### 7.3 Reliability & Observability
 - Sentry integration (backend + frontend) with PII sanitization.
 - `GET /health` endpoint for uptime/liveness monitoring.
+
+### 7.4 Configuration
+Additional configuration settings managed via `backend/app/config.py`:
+- `DEBUG`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE` — observability knobs.
+- `ALLOW_PUBLIC_SIGNUP`, `ENFORCE_PASSWORD_CHANGE`, `MIN_PASSWORD_LENGTH`, `MAX_PASSWORD_LENGTH` — auth governance.
+- `MAIL_FROM_NAME`, `MAIL_REPLY_TO` — email branding.
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — frontend Supabase client (Vite env).
