@@ -14,15 +14,16 @@ A protected Super Admin seed account cannot be edited, archived, or deleted.
 ## Customer
 - Create tickets. AI classifies department, priority, and sentiment, and redacts PII.
 - View and reply to own tickets. A reply moves `pending` back to `in_progress`.
+- Must wait for an agent reply before posting a follow-up.
 - Upload attachments (max 5MB).
 - Rate resolved tickets 1–5 (CSAT).
-- Cannot see internal notes, other customers' tickets, or admin/analytics pages.
+- Cannot see system log entries, other customers' tickets, or admin/analytics pages.
 
 ## Agent (Tier 1)
 - View department tickets: assigned to me, unassigned queue, or all.
 - Claim unassigned tickets. Status moves `open` → `in_progress`.
 - Update status: `open` → `in_progress` → `pending` → `resolved` → `closed`.
-- Post replies and internal notes. Watch SLA timers.
+- Post replies. Watch SLA timers. Replies are always public (cannot create system logs).
 - View personal and department analytics.
 - Cannot claim high-risk tickets (High priority + Negative sentiment) when a Manager exists.
 - Cannot reassign, unassign, or transfer tickets.
@@ -43,6 +44,7 @@ Everything an Agent does, plus:
 - Set SLA times per priority. Manage departments.
 - View global analytics.
 - Edit, reassign, or delete any ticket or message.
+- Can create system log entries (audit notes).
 
 ## Auto-Escalation
 | Trigger | Action |
@@ -55,7 +57,7 @@ Everything an Agent does, plus:
 ## Permission Matrix
 | Capability | Customer | Agent | Manager | Admin |
 |------------|:-:|:-:|:-:|:-:|
-| Create tickets | ✅ | - | - | - |
+| Create tickets | ✅ | — | — | — |
 | View own tickets only | ✅ | — | — | — |
 | View department tickets | ❌ | ✅ | ✅ | ✅ |
 | View all tickets | ❌ | ❌ | ❌ | ✅ |
@@ -64,7 +66,8 @@ Everything an Agent does, plus:
 | Delegate / unassign / transfer | ❌ | ❌ | ✅ | ✅ |
 | Triage queue | ❌ | ❌ | ❌ | ✅ |
 | Public replies | ✅ | ✅ | ✅ | ✅ |
-| Internal notes | ❌ | ✅ | ✅ | ✅ |
+| System log entries | ❌ | ❌ | ❌ | ✅ |
+| View system logs | ❌ | ✅ | ✅ | ✅ |
 | Submit CSAT | ✅ | ❌ | ❌ | ❌ |
 | Toggle agent availability | ❌ | ❌ | ✅ (own dept) | ✅ (all) |
 | Invite users, SLA, departments | ❌ | ❌ | ❌ | ✅ |

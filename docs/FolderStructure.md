@@ -22,6 +22,7 @@
 │   │   ├── crud
 │   │   │   └── base.py
 │   │   ├── models
+│   │   │   ├── __init__.py
 │   │   │   ├── attachment.py
 │   │   │   ├── category.py
 │   │   │   ├── department.py
@@ -34,28 +35,34 @@
 │   │   │   └── user.py
 │   │   ├── routers
 │   │   │   ├── auth.py
-│   │   │   ├── categories.py
 │   │   │   ├── departments.py
 │   │   │   ├── replies.py
 │   │   │   ├── sla_policies.py
-│   │   │   ├── sla_state.py
 │   │   │   ├── tickets.py
 │   │   │   └── users.py
 │   │   ├── schemas
 │   │   │   ├── auth.py
-│   │   │   ├── category.py
 │   │   │   ├── department.py
 │   │   │   ├── reply.py
 │   │   │   ├── sla_policy.py
-│   │   │   ├── sla_state.py
 │   │   │   ├── ticket_rating.py
 │   │   │   ├── ticket.py
 │   │   │   └── user.py
+│   │   ├── services
+│   │   │   ├── analytics_service.py
+│   │   │   ├── auth_service.py
+│   │   │   ├── manager_service.py
+│   │   │   ├── reply_service.py
+│   │   │   ├── sla_service.py
+│   │   │   ├── storage_service.py
+│   │   │   ├── ticket_service.py
+│   │   │   └── user_service.py
 │   │   ├── config.py
 │   │   ├── database.py
 │   │   ├── dependencies.py
 │   │   └── main.py
 │   ├── scripts
+│   │   ├── convert_and_upload_onnx.py
 │   │   └── seed.py
 │   └── tests
 │       ├── regression
@@ -72,8 +79,10 @@
 │       │   └── test_user_heplers.py
 │       └── conftest.py
 ├── docs
-│   ├── BRAIN.md
+│   ├── database.md
+│   ├── FolderStructure.md
 │   ├── PRD.md
+│   ├── ROLES.md
 │   └── TRD.md
 ├── frontend
 │   ├── public
@@ -81,10 +90,7 @@
 │   ├── src
 │   │   ├── components
 │   │   │   ├── admin
-│   │   │   │   ├── AgentInvite.jsx
-│   │   │   │   ├── DepartmentMgmt.jsx
-│   │   │   │   ├── SLAConfig.jsx
-│   │   │   │   └── UserMgmt.jsx
+│   │   │   │   └── AgentInvite.jsx
 │   │   │   ├── agent
 │   │   │   │   ├── ReplyBox.jsx
 │   │   │   │   ├── SLAWatcher.jsx
@@ -92,11 +98,12 @@
 │   │   │   ├── common
 │   │   │   │   ├── Button.jsx
 │   │   │   │   ├── DotGrid.jsx
+│   │   │   │   ├── ErrorBoundary.jsx
+│   │   │   │   ├── ImageLightbox.jsx
 │   │   │   │   ├── Layout.jsx
 │   │   │   │   ├── Loader.jsx
 │   │   │   │   ├── Logo.jsx
 │   │   │   │   ├── Modal.jsx
-│   │   │   │   ├── Navbar.jsx
 │   │   │   │   ├── ProtectedRoute.jsx
 │   │   │   │   ├── Sidebar.jsx
 │   │   │   │   └── Toast.jsx
@@ -110,12 +117,14 @@
 │   │   │   └── RoleContext.jsx
 │   │   ├── hooks
 │   │   │   ├── useAuth.js
+│   │   │   ├── useNotifications.js
+│   │   │   ├── useReplyRealtime.js
 │   │   │   ├── useSLA.js
 │   │   │   └── useTickets.js
 │   │   ├── pages
 │   │   │   ├── admin
 │   │   │   │   ├── Analytics.jsx
-│   │   │   │   ├── Settings.jsx
+│   │   │   │   ├── MemberInvite.jsx
 │   │   │   │   └── TicketPanel.jsx
 │   │   │   ├── agent
 │   │   │   │   ├── Analytics.jsx
@@ -153,16 +162,16 @@
 │   │   ├── index.css
 │   │   └── main.jsx
 │   └── index.html
+├── .env.example
 ├── alembic.ini
-├── config.json
 ├── Dockerfile
 ├── package-lock.json
 ├── package.json
 ├── postcss.config.js
-├── PRODUCTION_HANDOFF.md
 ├── pyrightconfig.json
 ├── README.md
 ├── requirements.txt
 ├── tailwind.config.js
+├── vercel.json
 └── vite.config.js
 ```

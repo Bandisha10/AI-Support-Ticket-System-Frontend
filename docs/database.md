@@ -9,7 +9,7 @@ PostgreSQL 15+ on Supabase. Async access via SQLAlchemy 2.0 + asyncpg. Schema ma
 ## Tables
 
 | Table | Purpose |
-|-------|---------|
+|-------|---------
 | `departments` | Support departments |
 | `users` | Customers, agents, managers, admins (synced with Supabase Auth) |
 | `sla_policies` | Response/resolution minutes per priority |
@@ -30,7 +30,7 @@ departments ─< users ─< tickets >─ sla_state >─ sla_policies
 
 ```sql
 CREATE TYPE user_role AS ENUM ('customer', 'agent', 'admin');
-CREATE TYPE agent_tier AS ENUM ('1', '2');  -- 1 = Regular, 2 = Manager
+CREATE TYPE agent_tier AS ENUM ('1', '2');  -- 1 = Regular Agent, 2 = Department Manager
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high');
 CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'pending', 'resolved', 'closed', 'human_review');
 CREATE TYPE ticket_sentiment AS ENUM ('positive', 'neutral', 'negative');
@@ -50,7 +50,7 @@ CREATE TABLE departments (
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255),
+    password_hash VARCHAR(255) NOT NULL,
     role user_role NOT NULL DEFAULT 'customer',
     department_id UUID REFERENCES departments(id) ON DELETE SET NULL,
     agent_tier agent_tier,  -- NULL for customer/admin, '1' agent, '2' manager
@@ -109,8 +109,7 @@ CREATE TABLE replies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     author_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    is_auto_reply BOOLEAN NOT NULL DEFAULT false,
-    is_internal_note BOOLEAN NOT NULL DEFAULT false,
+    is_system_log BOOLEAN NOT NULL DEFAULT false,
     body TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -169,7 +168,7 @@ CREATE INDEX idx_attachments_ticket ON attachments (ticket_id);
 ## DB-Related Settings
 
 | Variable | Required | Purpose |
-|----------|:-:|---------|
+|----------|:-:|---------
 | `DATABASE_URL` | Yes | Async PostgreSQL URI |
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | User management and storage |

@@ -1,7 +1,7 @@
 # Technical Requirements Document — Deskwise
 
-AI-based customer support ticket system. Version 2.1.0, production-hardened.
-Database details are in [DATABASE.md](DATABASE.md). Roles are in [ROLES.md](ROLES.md).
+AI-based customer support ticket system. Version 1.0.0.
+Database details are in [database.md](database.md). Roles are in [ROLES.md](ROLES.md).
 
 | Attribute | Value |
 |-----------|-------|
@@ -20,7 +20,7 @@ React 18 + Vite SPA (Customer / Agent / Manager / Admin portals)
 FastAPI worker
   ├─ Middleware: CORS whitelist, ForceHTTPS (HSTS), security headers, SlowAPI,
   │              dual JWT check, first-login password gate
-  ├─ Services:   ticket, reply, auth, user, manager, storage, analytics
+  ├─ Services:   ticket, reply, auth, user, manager, storage, analytics, sla
   ├─ NLP:        PII redaction → ONNX inference → threshold routing → high-risk escalation
   └─ Workers:    SLA monitor (60s loop), mailer (Brevo API + SMTP fallback)
         │  SQLAlchemy 2.0 (asyncpg)
@@ -31,7 +31,7 @@ Supabase PostgreSQL + Storage
 ### Core Rules
 
 1. **Lightweight inference.** `onnxruntime` on CPU with `intra_op_num_threads = 1`. No PyTorch. Prevents out-of-memory on free container tiers such as Render.
-2. **Lazy model loading.** Models load on first inference, not at startup. The port binds instantly.
+2. **Model preloading.** Models are preloaded at startup via `preload_models()` to eliminate cold-start inference lag.
 3. **Model vs. deterministic split.**
    - Model: department, priority, sentiment.
    - Deterministic: department mapping (SQL lookup), SLA deadlines, RBAC, Manager escalation.
@@ -45,7 +45,7 @@ Supabase PostgreSQL + Storage
 ### Backend
 
 | Component | Technology | Version |
-|-----------|-----------|---------|
+|-----------|-----------|---------
 | Framework | FastAPI / Starlette | ^0.115.0 / ^0.38.0 |
 | Server | Uvicorn | ^0.30.0 |
 | DB driver / ORM | asyncpg / SQLAlchemy async | ^0.29.0 / ^2.0.0 |
@@ -57,7 +57,7 @@ Supabase PostgreSQL + Storage
 ### ML / Inference
 
 | Component | Technology | Purpose |
-|-----------|-----------|---------|
+|-----------|-----------|---------
 | Engine | onnxruntime (CPU) | Fast, low-memory INT8 inference |
 | Tokenizer | `transformers.AutoTokenizer` | Truncates at `max_length=512` |
 | Model download | `huggingface_hub.hf_hub_download` | Downloads and caches ONNX files |
@@ -66,7 +66,7 @@ Supabase PostgreSQL + Storage
 ### Frontend
 
 | Component | Technology | Version |
-|-----------|-----------|---------|
+|-----------|-----------|---------
 | Framework / build | React + Vite | 18.3.1 / ^5.4.0 |
 | Styling | Tailwind CSS, PostCSS | ^3.4.0 / ^8.4.0 |
 | Icons | lucide-react | ^0.446.0 |
@@ -150,6 +150,7 @@ def _is_high_risk(priority: TicketPriority, sentiment: TicketSentiment) -> bool:
 | `manager_service.py` | Manager lookup, succession, reassignment on absence |
 | `storage_service.py` | Sanitize files, upload, signed URLs, streaming |
 | `analytics_service.py` | Response times, resolution rates, distributions, agent KPIs |
+| `sla_service.py` | SLA monitor worker, breach detection, escalation alerts |
 
 ### Endpoints
 
@@ -158,22 +159,47 @@ def _is_high_risk(priority: TicketPriority, sentiment: TicketSentiment) -> bool:
 | POST | `/auth/signup` | Public | Customer registration |
 | POST | `/auth/login` | Public | Login (JWT + refresh cookie) |
 | POST | `/auth/refresh` | Public | New JWT from refresh cookie |
+| POST | `/auth/logout` | Authenticated | Logout and revoke session |
+| GET | `/auth/me` | Authenticated | Current user profile |
+| PUT | `/auth/me` | Authenticated | Update own profile |
 | POST | `/auth/change-password` | Authenticated | Mandatory first-login change |
 | POST | `/auth/forgot-password` | Public | Request reset link |
+| GET | `/auth/verify-reset-token` | Public | Verify reset token |
+| POST | `/auth/reset-password` | Public | Reset password with token |
 | POST | `/tickets/` | Authenticated | Create ticket: scrub, infer, escalate |
-| GET | `/tickets/` | Role-filtered | List by status, priority, department, triage |
+| GET | `/tickets/` | Role-filtered | List by status, priority, department, triage, date |
 | GET | `/tickets/{id}` | Role-gated | Detail with replies, attachments, SLA |
 | PUT | `/tickets/{id}` | Agent / Admin | Update status or reassign |
-| POST | `/tickets/{id}/attachments` | Role-gated | Upload file (max 5MB) |
+| DELETE | `/tickets/{id}` | Admin | Delete ticket |
+| POST | `/tickets/{id}/attachments` | Role-gated | Upload files (max 5MB) |
+| GET | `/tickets/{id}/attachments` | Role-gated | List ticket attachments |
+| GET | `/tickets/{id}/attachments/{filename}` | Role-gated | Download attachment |
 | POST | `/tickets/{id}/rate` | Customer | CSAT 1–5 on resolved ticket |
 | GET | `/tickets/analytics` | Agent / Admin | SLA, volume, response metrics |
 | GET | `/tickets/analytics/agent` | Agent / Admin | Agent KPIs |
 | POST | `/replies/` | Role-gated | Public reply or internal note |
+| GET | `/replies/ticket/{ticket_id}` | Role-gated | List replies for a ticket |
+| GET | `/replies/{id}` | Authenticated | Get a single reply |
+| DELETE | `/replies/{id}` | Admin | Delete a reply |
 | POST | `/users/invite-agent` | Admin | Whitelisted invite with tier |
+| GET | `/users/` | Admin | List all users |
+| GET | `/users/{id}` | Admin | Get user details |
+| PUT | `/users/{id}` | Admin | Update user |
+| DELETE | `/users/{id}` | Admin | Archive user |
+| POST | `/users/{id}/archive` | Admin | Archive user |
+| POST | `/users/{id}/unarchive` | Admin | Unarchive user |
 | PATCH | `/users/{id}/availability` | Admin / Manager | Toggle active, reroute tickets |
 | GET | `/users/department/team` | Admin / Manager | Team with workload counts |
+| POST | `/departments/` | Admin | Create department |
 | GET | `/departments/` | Authenticated | Departments and ticket counts |
+| GET | `/departments/{id}` | Authenticated | Get department |
+| PUT | `/departments/{id}` | Admin | Update department |
+| DELETE | `/departments/{id}` | Admin | Delete department |
+| POST | `/sla-policies/` | Admin | Create SLA policy |
 | GET | `/sla-policies/` | Authenticated | SLA thresholds |
+| GET | `/sla-policies/{id}` | Authenticated | Get SLA policy |
+| PUT | `/sla-policies/{id}` | Admin | Update SLA policy |
+| DELETE | `/sla-policies/{id}` | Admin | Delete SLA policy |
 | GET | `/health` | Public | Liveness probe |
 
 ## 6. Workflows
@@ -201,7 +227,7 @@ Runs as `asyncio.create_task()` every 60 seconds.
 |------|-------------|
 | Memory | Peak under 512MB on single-dyno/free platforms |
 | Inference | Under 100ms per classification on CPU |
-| Boot | No model loading at startup. Port binds instantly. |
+| Boot | Models preloaded at startup via `preload_models()`. |
 | REST latency | p95 under 200ms for core ticket and conversation endpoints |
 | AI failure | Ticket falls back to `human_review`, no department, `medium` priority, `neutral` sentiment, confidence 0.50 |
 | Mail failure | Log a warning. Do not abort the transaction or return HTTP 500. |
@@ -219,12 +245,24 @@ Runs as `asyncio.create_task()` every 60 seconds.
 | `SUPABASE_STORAGE_BUCKET` | No | Default `ticket-attachments` |
 | `FRONTEND_URL` | Yes | Allowed CORS origin, e.g. `http://localhost:5173` |
 | `FORCE_HTTPS` | No | SSL redirect and HSTS (default `False`) |
+| `DEBUG` | No | Debug mode (default `False`) |
+| `APP_NAME` | No | Application name (default `Deskwise`) |
+| `ALLOW_PUBLIC_SIGNUP` | No | Allow public customer registration (default `True`) |
+| `ENFORCE_PASSWORD_CHANGE` | No | Require first-login password change (default `True`) |
+| `MIN_PASSWORD_LENGTH` | No | Minimum password length (default `8`) |
+| `MAX_PASSWORD_LENGTH` | No | Maximum password length (default `16`) |
 | `BREVO_API_KEY` | No | Brevo REST key |
 | `SMTP_HOST` / `SMTP_PORT` | No | Relay `smtp-relay.brevo.com` / `587` |
 | `SMTP_USER` / `SMTP_PASSWORD` | No | SMTP credentials |
 | `MAIL_FROM` | No | Sender (default `deskwise.support@gmail.com`) |
+| `MAIL_FROM_NAME` | No | Sender display name (default `Deskwise Support`) |
+| `MAIL_REPLY_TO` | No | Reply-to address |
 | `HF_TOKEN` | No | Hugging Face download token |
 | `SENTRY_DSN` | No | Sentry error tracking |
+| `SENTRY_ENVIRONMENT` | No | Sentry environment tag (default `development`) |
+| `SENTRY_TRACES_SAMPLE_RATE` | No | Sentry trace sample rate (default `1.0`) |
+| `VITE_SUPABASE_URL` | Yes* | Frontend Supabase URL (*frontend .env) |
+| `VITE_SUPABASE_ANON_KEY` | Yes* | Frontend Supabase anon key (*frontend .env) |
 
 ## 9. Test Plan
 
