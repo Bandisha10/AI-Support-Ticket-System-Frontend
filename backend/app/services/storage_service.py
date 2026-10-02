@@ -143,13 +143,23 @@ async def upload_attachments_workflow(
         disk_filename = f"{unique_prefix}_{safe_orig_name}"
         storage_path = f"{ticket_id}/{disk_filename}"
 
-        content = await file.read()
-        file_size = len(content)
-        if file_size > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                400,
-                f"File '{file.filename}' exceeds maximum allowed size of 5 MB.",
-            )
+        chunk_size = 1024 * 1024  # 1 MB chunk
+        total_read = 0
+        chunks = []
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_read += len(chunk)
+            if total_read > MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    413,
+                    f"File '{file.filename}' exceeds maximum allowed size of 5 MB.",
+                )
+            chunks.append(chunk)
+        content = b"".join(chunks)
+        file_size = total_read
+
 
         content_type = file.content_type or "application/octet-stream"
         try:
