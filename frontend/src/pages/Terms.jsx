@@ -104,19 +104,11 @@ export default function Terms() {
           <Link to="/" className="flex items-center gap-2.5">
             <Logo size={28} />
             <span className="text-lg font-bold text-white">
-              Desk<span className="text-accent">wise</span> Support
+              Desk<span className="text-accent">wise</span>
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => window.print()}
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-surface-border bg-surface-bg px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-white transition-colors"
-              title="Print terms"
-            >
-              <Printer className="h-3.5 w-3.5 text-gray-400" />
-              <span>Print</span>
-            </button>
 
             {user ? (
               <Link
@@ -261,21 +253,12 @@ export default function Terms() {
       <footer className="mt-12 border-t border-surface-border bg-surface-card/40 py-6 text-center text-xs text-gray-500">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 sm:flex-row">
           <p>
-            © {new Date().getFullYear()} Deskwise Support System. All rights
+            © {new Date().getFullYear()} Deskwise System. All rights
             reserved.
           </p>
           <div className="flex items-center gap-4">
-            <Link
-              to="/terms-and-conditions"
-              className="text-accent hover:underline"
-            >
-              Terms & Conditions
-            </Link>
             <Link to="/faq" className="hover:text-accent transition-colors">
               Help & FAQ
-            </Link>
-            <Link to="/login" className="hover:text-accent transition-colors">
-              Sign In
             </Link>
           </div>
         </div>

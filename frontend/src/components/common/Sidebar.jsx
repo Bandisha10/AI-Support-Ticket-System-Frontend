@@ -20,7 +20,6 @@ import {
   Building2,
   Award,
   PlusCircle,
-  HelpCircle,
   History,
   Phone,
   Pencil,
@@ -252,7 +251,6 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
         { label: "My Tickets", to: "/tickets", icon: Ticket, end: true },
         { label: "New Ticket", to: "/tickets/new", icon: PlusCircle },
         { label: "History", to: "/tickets/history", icon: History },
-        { label: "Help & FAQ", to: "/faq", icon: HelpCircle },
       ];
     }
     return [];

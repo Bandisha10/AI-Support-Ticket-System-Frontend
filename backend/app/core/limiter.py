@@ -12,7 +12,7 @@ from slowapi.util import get_remote_address
 
 limiter = Limiter(
     key_func=get_remote_address,      # Identifies clients by caller IP address
-    default_limits=[],                # No global limits; limits are set per route via @limiter.limit()
+    default_limits=["120/minute"],                # No global limits; limits are set per route via @limiter.limit()
     storage_uri="memory://",
     strategy="moving-window",         # Moving window provides strict rolling rate limiting
     headers_enabled=False,            # Custom headers are formatted in the FastAPI exception handler

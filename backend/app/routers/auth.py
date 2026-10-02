@@ -3,13 +3,9 @@ Auth Router.
 Clean HTTP controller delegating authentication workflows to auth_service.
 """
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.concurrency import run_in_threadpool
 
 from backend.app.config import settings
 from backend.app.core.limiter import limiter
@@ -20,7 +16,6 @@ from backend.app.dependencies import (
     get_current_user,
     get_token_claims,
 )
-from backend.app.models.department import Department
 from backend.app.models.user import User
 from backend.app.schemas.auth import (
     ChangePasswordRequest,
@@ -63,7 +58,9 @@ def _delete_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/signup", status_code=201)
-async def signup(payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/hour")
+async def signup(request: Request, payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
+
     return await auth_service.signup_user_workflow(payload, db)
 
 
@@ -171,8 +168,11 @@ async def verify_reset_token(token: str):
 
 
 @router.post("/reset-password", response_model=PasswordChangedResponse)
+@limiter.limit("5/15minute")
 async def reset_password(
-    payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db)
 ):
     await auth_service.reset_password_workflow(payload, db)
     return PasswordChangedResponse(

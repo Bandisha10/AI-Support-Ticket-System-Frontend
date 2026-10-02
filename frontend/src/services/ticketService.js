@@ -117,10 +117,6 @@ export async function getTicketReplies(ticketId) {
   return data;
 }
 
-export async function getSuggestedReply() {
-  return { suggestion: "" };
-}
-
 // --- Analytics ---
 export async function getAgentAnalytics(params = {}) {
   const { data } = await api.get("/tickets/analytics/agent", {
