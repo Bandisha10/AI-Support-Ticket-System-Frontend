@@ -44,3 +44,26 @@ export async function updateAgentAvailability(userId, isActive) {
   const { data } = await api.patch(`/users/${userId}/availability`, { is_active: isActive });
   return data;
 }
+
+// Customer Management API methods
+export async function getCustomersSummary(includesArchived = true) {
+  const { data } = await api.get("/users/customers/summary", {
+    params: { includes_archived: includesArchived },
+  });
+  return data;
+}
+
+export async function getCustomerTickets(customerId) {
+  const { data } = await api.get(`/users/customers/${customerId}/tickets`);
+  return data;
+}
+
+export async function archiveUser(userId) {
+  const { data } = await api.post(`/users/${userId}/archive`);
+  return data;
+}
+
+export async function unarchiveUser(userId) {
+  const { data } = await api.post(`/users/${userId}/unarchive`);
+  return data;
+}

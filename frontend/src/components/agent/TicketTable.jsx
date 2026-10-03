@@ -8,7 +8,16 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  MessageSquare,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
+import {
+  isTicketUnread,
+  markTicketViewed,
+  useTicketViewSync,
+} from "../../utils/ticketViewTracking";
 import { STATUS_COLORS, SENTIMENT_COLORS } from "../../utils/constants";
 import { formatRelativeTime } from "../../utils/formatters";
 import SLAWatcher from "./SLAWatcher";
@@ -19,16 +28,45 @@ export default function TicketTable({
   renderActions,
   departments = [],
   extraFilter,
+  isHistory = false,
 }) {
+  useTicketViewSync();
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState(
+    isHistory ? "opened_desc" : "default",
+  );
+
+  useEffect(() => {
+    if (isHistory) {
+      setSortOrder("opened_desc");
+    } else {
+      setSortOrder("default");
+    }
+  }, [isHistory]);
+
+  const handleToggleOpenedSort = () => {
+    setSortOrder((prev) => {
+      if (isHistory) {
+        return prev === "opened_desc" ? "opened_asc" : "opened_desc";
+      }
+      if (prev === "opened_desc") return "opened_asc";
+      if (prev === "opened_asc") return "default";
+      return "opened_desc";
+    });
+    setCurrentPage(1);
+  };
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, priorityFilter, sortOrder, tickets]);
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -60,8 +98,10 @@ export default function TicketTable({
           .includes(debouncedSearch.toLowerCase()) ||
         t.body_redacted?.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchStatus =
+        isHistory ||
         statusFilter === "all" ||
         t.status?.toLowerCase() === statusFilter.toLowerCase();
+
       const matchPriority =
         priorityFilter === "all" ||
         t.priority?.toLowerCase() === priorityFilter.toLowerCase();
@@ -70,6 +110,20 @@ export default function TicketTable({
 
     // Pin active escalations to the top
     return filtered.sort((a, b) => {
+      if (sortOrder === "opened_desc") {
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
+      }
+      if (sortOrder === "opened_asc") {
+        return (
+          new Date(a.created_at || 0).getTime() -
+          new Date(b.created_at || 0).getTime()
+        );
+      }
+
+      // Default: Pin active escalations to the top
       const aUrgent =
         (a.priority === "high" || a.sentiment === "negative") &&
         a.status !== "resolved" &&
@@ -80,6 +134,7 @@ export default function TicketTable({
         b.status !== "closed";
       if (aUrgent && !bUrgent) return -1;
       if (!aUrgent && bUrgent) return 1;
+
       // Secondary sort: prioritize tickets closest to SLA resolution deadline
       const aDue =
         a.sla_due_at && a.status !== "resolved" && a.status !== "closed"
@@ -91,7 +146,7 @@ export default function TicketTable({
           : Infinity;
       return aDue - bDue;
     });
-  }, [tickets, debouncedSearch, statusFilter, priorityFilter]);
+  }, [tickets, debouncedSearch, statusFilter, priorityFilter, sortOrder]);
 
   // Pagination Slicing
   const totalItems = filteredTickets.length;
@@ -113,15 +168,27 @@ export default function TicketTable({
       return [1, 2, 3, 4, "...", totalPages];
     }
     if (safePage >= totalPages - 2) {
-      return [1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+      return [
+        1,
+        "...",
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      ];
     }
     return [1, "...", safePage - 1, safePage, safePage + 1, "...", totalPages];
   };
 
-  if (loading)
+  // Only show cold loader if we have literally no tickets yet
+  if (loading && tickets.length === 0) {
     return (
-      <p className="text-sm text-gray-500 py-6 text-center">Loading queue…</p>
+      <div className="py-16 text-center text-sm text-gray-500">
+        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-accent border-r-transparent mb-2" />
+        <p>Loading queue…</p>
+      </div>
     );
+  }
 
   return (
     <div className="space-y-4">
@@ -138,21 +205,24 @@ export default function TicketTable({
           />
         </div>
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <div className="relative min-w-[130px]">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-xs text-gray-200 focus:border-accent focus:outline-none"
-            >
-              <option value="all">All Statuses</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In Progress</option>
-              <option value="pending">Pending</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </select>
-            <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
-          </div>
+          {/* Status Filter (Hidden on History) */}
+          {!isHistory && (
+            <div className="relative min-w-[130px]">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-xs text-gray-200 focus:border-accent focus:outline-none"
+              >
+                <option value="all">All Statuses</option>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="pending">Pending</option>
+              </select>
+              <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+            </div>
+          )}
+
+          {/* Priority Filter */}
           <div className="relative min-w-[130px]">
             <select
               value={priorityFilter}
@@ -166,6 +236,24 @@ export default function TicketTable({
             </select>
             <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           </div>
+
+          {/* Sort By Open Time */}
+          <div className="relative min-w-[150px]">
+            <select
+              value={sortOrder}
+              onChange={(e) => {
+                setSortOrder(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-xs text-gray-200 focus:border-accent focus:outline-none"
+            >
+              {!isHistory && <option value="default">SLA / Escalation</option>}
+              <option value="opened_desc">Newest Opened</option>
+              <option value="opened_asc">Oldest Opened</option>
+            </select>
+            <ArrowUpDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+          </div>
+
           {extraFilter}
         </div>
       </div>
@@ -187,87 +275,128 @@ export default function TicketTable({
                   <th className="py-2.5 px-3">Sentiment</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">SLA</th>
-                  <th className="py-2.5 px-3">Opened</th>
+                  <th className="py-2.5 px-3">
+                    <button
+                      type="button"
+                      onClick={handleToggleOpenedSort}
+                      className="inline-flex items-center gap-1 uppercase font-semibold text-xs text-gray-400 hover:text-white transition-colors group cursor-pointer"
+                      title="Click to sort by open time"
+                    >
+                      <span>Opened</span>
+                      {sortOrder === "opened_desc" ? (
+                        <ArrowDown className="h-3.5 w-3.5 text-accent" />
+                      ) : sortOrder === "opened_asc" ? (
+                        <ArrowUp className="h-3.5 w-3.5 text-accent" />
+                      ) : (
+                        <ArrowUpDown className="h-3 w-3 text-gray-600 group-hover:text-gray-400" />
+                      )}
+                    </button>
+                  </th>
+
                   {renderActions && <th className="py-2.5 px-3">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {paginatedTickets.map((t) => (
-                  <tr
-                    key={t.id}
-                    className="border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors"
-                  >
-                    <td className="py-3 px-3 whitespace-normal min-w-[200px] sm:min-w-[240px]">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Link
-                          to={`/agent/tickets/${t.id}`}
-                          className="font-medium text-accent hover:underline"
-                        >
-                          {t.subject}
-                        </Link>
-                        {(t.priority === "high" || t.sentiment === "negative") &&
-                          t.status !== "resolved" &&
-                          t.status !== "closed" && (
-                            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                              Escalated
-                            </span>
-                          )}
-                      </div>
-                      {t.classification_confidence !== null && (
-                        <div className="text-[11px] text-gray-400 mt-0.5">
-                          Department:{" "}
-                          {departmentNameById[t.department_id] || "General"}
-                          {t.classification_confidence !== undefined && (
-                            <span>
-                              {" "}
-                              ({(t.classification_confidence * 100).toFixed(0)}%
-                              confidence)
-                            </span>
-                          )}
-                        </div>
+                {paginatedTickets.map((t) => {
+                  const hasCustomerReply =
+                    t.status !== "resolved" &&
+                    t.status !== "closed" &&
+                    isTicketUnread(t, "agent");
+
+                  return (
+                    <tr
+                      key={t.id}
+                      className={clsx(
+                        "border-b border-surface-border last:border-0 hover:bg-surface-hover transition-colors",
+                        hasCustomerReply &&
+                          "bg-amber-400/[0.04] border-l-2 border-l-[#f2b705]",
                       )}
-                    </td>
-                    <td className="py-3 px-3 text-xs text-gray-400">
-                      {t.customer_email || t.customer_name || "Customer"}
-                    </td>
-                    <td className="py-3 px-3 text-xs capitalize text-gray-300">
-                      {t.priority || "Normal"}
-                    </td>
-                    <td className="py-3 px-3">
-                      {t.sentiment ? (
+                    >
+                      <td className="py-3 px-3 whitespace-normal min-w-[200px] sm:min-w-[240px]">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link
+                            to={`/agent/tickets/${t.id}`}
+                            onClick={() => markTicketViewed(t.id)}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {t.subject}
+                          </Link>
+
+                          {hasCustomerReply && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-400/15 border border-amber-400/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-300 animate-pulse">
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              <span>Customer Replied</span>
+                            </span>
+                          )}
+
+                          {(t.priority === "high" ||
+                            t.sentiment === "negative") &&
+                            t.status !== "resolved" &&
+                            t.status !== "closed" && (
+                              <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                                Escalated
+                              </span>
+                            )}
+                        </div>
+
+                        {t.classification_confidence !== null && (
+                          <div className="text-[11px] text-gray-400 mt-0.5">
+                            Department:{" "}
+                            {departmentNameById[t.department_id] || "General"}
+                            {t.classification_confidence !== undefined && (
+                              <span>
+                                {" "}
+                                (
+                                {(t.classification_confidence * 100).toFixed(0)}
+                                % confidence)
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-xs text-gray-400">
+                        {t.customer_email || t.customer_name || "Customer"}
+                      </td>
+                      <td className="py-3 px-3 text-xs capitalize text-gray-300">
+                        {t.priority || "Normal"}
+                      </td>
+                      <td className="py-3 px-3">
+                        {t.sentiment ? (
+                          <span
+                            className={clsx(
+                              "rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
+                              SENTIMENT_COLORS[t.sentiment],
+                            )}
+                          >
+                            {t.sentiment}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3">
                         <span
                           className={clsx(
                             "rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
-                            SENTIMENT_COLORS[t.sentiment],
+                            STATUS_COLORS[t.status],
                           )}
                         >
-                          {t.sentiment}
+                          {t.status?.replace("_", " ")}
                         </span>
-                      ) : (
-                        <span className="text-xs text-gray-500">—</span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <SLAWatcher dueAt={t.sla_due_at} />
+                      </td>
+                      <td className="py-3 px-3 text-xs text-gray-500">
+                        {formatRelativeTime(t.created_at)}
+                      </td>
+                      {renderActions && (
+                        <td className="py-3 px-3">{renderActions(t)}</td>
                       )}
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={clsx(
-                          "rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize",
-                          STATUS_COLORS[t.status],
-                        )}
-                      >
-                        {t.status?.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <SLAWatcher dueAt={t.sla_due_at} />
-                    </td>
-                    <td className="py-3 px-3 text-xs text-gray-500">
-                      {formatRelativeTime(t.created_at)}
-                    </td>
-                    {renderActions && (
-                      <td className="py-3 px-3">{renderActions(t)}</td>
-                    )}
-                  </tr>
-                ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -277,7 +406,8 @@ export default function TicketTable({
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-surface-border text-xs text-gray-400">
               <div className="flex flex-wrap items-center gap-3">
                 <span>
-                  Showing <strong className="text-white">{startIndex + 1}</strong> to{" "}
+                  Showing{" "}
+                  <strong className="text-white">{startIndex + 1}</strong> to{" "}
                   <strong className="text-white">{endIndex}</strong> of{" "}
                   <strong className="text-white">{totalItems}</strong> tickets
                 </span>
@@ -323,7 +453,10 @@ export default function TicketTable({
                   <div className="flex items-center gap-1 px-1">
                     {getPageNumbers().map((item, idx) =>
                       item === "..." ? (
-                        <span key={`ellipsis-${idx}`} className="px-1 text-gray-500">
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="px-1 text-gray-500"
+                        >
                           ...
                         </span>
                       ) : (
@@ -345,7 +478,9 @@ export default function TicketTable({
 
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={safePage === totalPages}
                     className="p-1.5 rounded-lg border border-surface-border bg-surface-bg text-gray-400 hover:text-white hover:border-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                     title="Next Page"

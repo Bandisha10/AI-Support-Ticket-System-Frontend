@@ -35,6 +35,8 @@ import {
 } from "../../utils/formatters";
 import { getAttachmentUrl, isImageAttachment } from "../../utils/attachments";
 import { useReplyRealtime } from "../../hooks/useReplyRealtime";
+import { markTicketViewed } from "../../utils/ticketViewTracking";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function CustomerTicketDetail() {
   const { ticketId } = useParams();
@@ -48,6 +50,13 @@ export default function CustomerTicketDetail() {
   const [hasRated, setHasRated] = useState(false);
   const [existingRating, setExistingRating] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (ticketId) {
+      markTicketViewed(ticketId);
+    }
+  }, [ticketId]);
 
   // Check if user already rated this ticket
   useEffect(() => {
@@ -109,6 +118,7 @@ export default function CustomerTicketDetail() {
     setSending(true);
     try {
       await ticketService.addCustomerReply(ticketId, reply);
+      queryClient.invalidateQueries({ queryKey: ["tickets"] });
       setReply("");
       showToast("Reply sent", "success");
       await fetchReplies();

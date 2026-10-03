@@ -4,21 +4,41 @@ import { supabase } from "../utils/supabase";
 
 export const AuthContext = createContext(null);
 
+// frontend/src/context/AuthContext.jsx (replace lines 8-23)
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // 1. Read cached user synchronously so the UI renders instantly without a blank screen
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // On mount: if a token exists, restore the session by fetching the profile.
+  // Only show the blocking fullScreen loader if we have a token but NO cached user profile
+  const [loading, setLoading] = useState(() => {
+    const token = localStorage.getItem("access_token");
+    const storedUser = localStorage.getItem("user");
+    return Boolean(token && !storedUser);
+  });
+
+  // Revalidate profile in background (stale-while-revalidate)
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (!token) {
       setLoading(false);
       return;
     }
+
     authService
       .fetchCurrentUser()
-      .then((profile) => setUser(withDisplayName(profile)))
-      .catch(() => clearSession()) // token expired/invalid -> log out cleanly
+      .then((profile) => {
+        const fullProfile = withDisplayName(profile);
+        setUser(fullProfile);
+        localStorage.setItem("user", JSON.stringify(fullProfile));
+      })
+      .catch(() => clearSession()) // Token expired -> clear session
       .finally(() => setLoading(false));
   }, []);
 

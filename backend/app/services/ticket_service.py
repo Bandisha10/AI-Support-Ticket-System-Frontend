@@ -34,6 +34,7 @@ from backend.app.services.manager_service import get_active_department_manager
 from backend.app.services.storage_service import get_ticket_attachments
 from backend.app.models.ticket_rating import TicketRating
 from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
+from backend.app.models.reply import Reply
 
 logger = logging.getLogger(__name__)
 ticket_crud = CRUDBase(Ticket)
@@ -55,7 +56,10 @@ def ticket_to_read(
     sla_due_at=None,
     attachments: list[AttachmentRead] | None = None,
     rating: int | None = None,
-    feedback: str | None = None
+    feedback: str | None = None,
+    last_reply_at: datetime | None = None,
+    last_reply_by_customer: bool | None = None,
+    last_reply_body: str | None = None,
 ) -> TicketRead:
     """Constructs a TicketRead response object."""
     return TicketRead(
@@ -73,10 +77,14 @@ def ticket_to_read(
         sla_due_at=sla_due_at,
         rating=rating,
         feedback=feedback,
+        last_reply_at=last_reply_at,
+        last_reply_by_customer=last_reply_by_customer,
+        last_reply_body=last_reply_body,
         attachments=attachments or [],
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
+
 
 
 async def create_ticket_workflow(
@@ -479,6 +487,25 @@ async def list_tickets_workflow(
     limit: int = 50,
 ) -> list[TicketRead]:
     """Builds filtered ticket queries according to user role, SLA status, and triage rules."""
+
+        # Subquery to pick the single most recent non-system reply for each ticket
+    latest_reply_subq = (
+        select(
+            Reply.ticket_id,
+            Reply.author_id,
+            Reply.created_at.label("last_reply_at"),
+            Reply.body.label("last_reply_body"),
+            sa_func.row_number()
+            .over(
+                partition_by=Reply.ticket_id,
+                order_by=Reply.created_at.desc(),
+            )
+            .label("rn"),
+        )
+        .where(Reply.is_system_log.is_(False))
+        .subquery()
+    )
+
     query = (
         select(
             Ticket,
@@ -486,12 +513,19 @@ async def list_tickets_workflow(
             SLAState.resolution_due_at,
             TicketRating.rating,
             TicketRating.feedback,
+            latest_reply_subq.c.last_reply_at,
+            latest_reply_subq.c.author_id.label("last_reply_author_id"),
+            latest_reply_subq.c.last_reply_body,
         )
         .outerjoin(User, Ticket.customer_id == User.id)
         .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
         .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
+        .outerjoin(
+            latest_reply_subq,
+            (latest_reply_subq.c.ticket_id == Ticket.id) & (latest_reply_subq.c.rn == 1),
+        )
     )
-
+    
     if sla_status:
         now_dt = datetime.now(timezone.utc)
         query = query.where(
@@ -613,7 +647,6 @@ async def list_tickets_workflow(
                 except Exception as exc:
                     logger.warning("Invalid end_date '%s': %s", end_date, exc)
 
-
     if escalated:
         query = query.where(
             (Ticket.priority == TicketPriority.high)
@@ -655,8 +688,19 @@ async def list_tickets_workflow(
     rows = result.all()
 
     return [
-        ticket_to_read(ticket, customer_email, sla_due_at, rating=r_val, feedback=f_val)
-       for ticket, customer_email, sla_due_at, r_val, f_val in rows
+        ticket_to_read(
+            ticket,
+            customer_email,
+            sla_due_at,
+            rating=r_val,
+            feedback=f_val,
+            last_reply_at=last_reply_at,
+            last_reply_by_customer=(last_reply_author_id == ticket.customer_id)
+            if last_reply_author_id
+            else None,
+            last_reply_body=last_reply_body,
+        )
+        for ticket, customer_email, sla_due_at, r_val, f_val, last_reply_at, last_reply_author_id, last_reply_body in rows
     ]
 
 

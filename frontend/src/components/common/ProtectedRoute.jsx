@@ -10,14 +10,12 @@ import Loader from "./Loader";
  * /change-password until they set their own. Pass bypassPasswordGate on the
  * change-password route itself, or it would redirect to itself forever.
  */
-export default function ProtectedRoute({ allowedRoles, bypassPasswordGate = false }) {
+export default function ProtectedRoute({ children, allowedRoles, bypassPasswordGate = false }) {
   const { isAuthenticated, loading, role, mustChangePassword } = useAuth();
-
   if (loading) return <Loader fullScreen />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (mustChangePassword && !bypassPasswordGate)
     return <Navigate to="/change-password" replace />;
   if (allowedRoles && !allowedRoles.includes(role)) return <Navigate to="/" replace />;
-
-  return <Outlet />;
+  return children ? children : <Outlet />;
 }

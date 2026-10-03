@@ -64,6 +64,9 @@ class TicketRead(BaseModel):
     sla_due_at: datetime | None = None
     rating: int | None = None
     feedback: str | None = None
+    last_reply_at: datetime | None = None
+    last_reply_by_customer: bool | None = None
+    last_reply_body: str | None = None
     attachments: list[AttachmentRead] = []
     created_at: datetime
     updated_at: datetime

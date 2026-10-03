@@ -23,7 +23,9 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Customer
 const NewTicket = lazy(() => import("./pages/customer/NewTicket"));
-const CustomerTicketDetail = lazy(() => import("./pages/customer/TicketDetail"));
+const CustomerTicketDetail = lazy(
+  () => import("./pages/customer/TicketDetail"),
+);
 const MyTickets = lazy(() => import("./pages/customer/MyTickets"));
 const TicketHistory = lazy(() => import("./pages/customer/TicketHistory"));
 
@@ -36,6 +38,9 @@ const TicketDetail = lazy(() => import("./pages/agent/TicketDetail"));
 const Analytics = lazy(() => import("./pages/admin/Analytics"));
 const MemberInvite = lazy(() => import("./pages/admin/MemberInvite"));
 const AdminTicketPanel = lazy(() => import("./pages/admin/TicketPanel"));
+const CustomerManagement = lazy(
+  () => import("./pages/admin/CustomerManagement"),
+);
 
 function HomeRedirect() {
   const { homeRoute } = useAuth();
@@ -49,7 +54,7 @@ function SmartTicketDetailRedirect() {
   if (role === "agent" || role === "admin") {
     return <Navigate to={`/agent/tickets/${ticketId}`} replace />;
   }
-  return <Layout><CustomerTicketDetail /></Layout>;
+  return <CustomerTicketDetail />;
 }
 
 function SmartTicketsRedirect() {
@@ -61,7 +66,7 @@ function SmartTicketsRedirect() {
   if (role === "agent") {
     return <Navigate to="/agent/ticket-panel" replace />;
   }
-  return <Layout><MyTickets /></Layout>;
+  return <MyTickets />;
 }
 
 export default function App() {
@@ -74,7 +79,10 @@ export default function App() {
               <Routes>
                 {/* Public Routes */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/complete-profile" element={<CompleteProfile />} />
+                  <Route
+                    path="/complete-profile"
+                    element={<CompleteProfile />}
+                  />
                 </Route>
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
@@ -88,29 +96,83 @@ export default function App() {
                   <Route path="/change-password" element={<ChangePassword />} />
                 </Route>
 
-                {/* General Ticket routes (Smart Role Redirection) */}
+                {/* Authenticated routes wrapped with Layout and Sidebar */}
                 <Route element={<ProtectedRoute />}>
-                  <Route path="/tickets/new" element={<Layout><NewTicket /></Layout>} />
-                  <Route path="/tickets/history" element={<Layout><TicketHistory /></Layout>} />
-                  <Route path="/tickets/:ticketId" element={<SmartTicketDetailRedirect />} />
-                  <Route path="/tickets" element={<SmartTicketsRedirect />} />
-                </Route>
-
-                {/* Agent routes */}
-                <Route element={<ProtectedRoute allowedRoles={["agent", "admin"]} />}>
-                  <Route path="/agent/analytics" element={<Layout><AgentAnalytics /></Layout>} />
-                  <Route path="/agent/ticket-panel" element={<Layout><AgentTicketPanel /></Layout>} />
-                  <Route path="/agent/tickets/:ticketId" element={<Layout><TicketDetail /></Layout>} />
-                  <Route path="/agent/dashboard" element={<Navigate to="/agent/ticket-panel" replace />} />
-                </Route>
-
-                {/* Admin routes */}
-                <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
-                  <Route path="/admin/analytics" element={<Layout><Analytics /></Layout>} />
-                  <Route path="/admin/member-invite" element={<Layout><MemberInvite /></Layout>} />
-                  <Route path="/admin/settings" element={<Navigate to="/admin/member-invite" replace />} />
-                  <Route path="/admin/ticket-panel" element={<Layout><AdminTicketPanel /></Layout>} />
-                  <Route path="/admin/triage" element={<Navigate to="/admin/ticket-panel" replace />} />
+                  <Route element={<Layout />}>
+                    <Route path="/tickets/new" element={<NewTicket />} />
+                    <Route
+                      path="/tickets/history"
+                      element={<TicketHistory />}
+                    />
+                    <Route
+                      path="/tickets/:ticketId"
+                      element={<SmartTicketDetailRedirect />}
+                    />
+                    <Route path="/tickets" element={<SmartTicketsRedirect />} />
+                    {/* Customer Routes */}
+                    <Route
+                      element={<ProtectedRoute allowedRoles={["customer"]} />}
+                    >
+                      <Route path="/customer/tickets" element={<MyTickets />} />
+                      <Route
+                        path="/customer/tickets/:ticketId"
+                        element={<CustomerTicketDetail />}
+                      />
+                    </Route>
+                    {/* Agent Routes */}
+                    <Route
+                      element={
+                        <ProtectedRoute allowedRoles={["agent", "admin"]} />
+                      }
+                    >
+                      <Route
+                        path="/agent/ticket-panel"
+                        element={<AgentTicketPanel />}
+                      />
+                      <Route
+                        path="/agent/tickets"
+                        element={<Navigate to="/agent/ticket-panel" replace />}
+                      />
+                      <Route
+                        path="/agent/tickets/:ticketId"
+                        element={<TicketDetail />}
+                      />
+                      <Route
+                        path="/agent/analytics"
+                        element={<AgentAnalytics />}
+                      />
+                      <Route
+                        path="/agent/dashboard"
+                        element={<Navigate to="/agent/ticket-panel" replace />}
+                      />
+                    </Route>
+                    {/* Admin Routes */}
+                    <Route
+                      element={<ProtectedRoute allowedRoles={["admin"]} />}
+                    >
+                      <Route path="/admin/analytics" element={<Analytics />} />
+                      <Route
+                        path="/admin/customers"
+                        element={<CustomerManagement />}
+                      />
+                      <Route
+                        path="/admin/member-invite"
+                        element={<MemberInvite />}
+                      />
+                      <Route
+                        path="/admin/ticket-panel"
+                        element={<AdminTicketPanel />}
+                      />
+                      <Route
+                        path="/admin/settings"
+                        element={<Navigate to="/admin/member-invite" replace />}
+                      />
+                      <Route
+                        path="/admin/triage"
+                        element={<Navigate to="/admin/ticket-panel" replace />}
+                      />
+                    </Route>
+                  </Route>
                 </Route>
 
                 <Route path="/404" element={<NotFound />} />

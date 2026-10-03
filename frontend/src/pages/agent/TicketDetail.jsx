@@ -16,6 +16,8 @@ import {
   Sparkles,
   ZoomIn,
   UserCheck,
+  CheckCircle2,
+  Star,
 } from "lucide-react";
 import { useTicketDetail } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
@@ -36,6 +38,8 @@ import { STATUS_COLORS } from "../../utils/constants";
 import { useReplyRealtime } from "../../hooks/useReplyRealtime";
 import { getDepartmentTeam } from "../../services/adminService";
 import api from "../../services/api";
+import { markTicketViewed } from "../../utils/ticketViewTracking";
+import { useToast } from "../../components/common/Toast";
 
 export default function TicketDetail() {
   const { ticketId } = useParams();
@@ -53,6 +57,13 @@ export default function TicketDetail() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [delegating, setDelegating] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const { showToast } = useToast();
+
+  useEffect(() => {
+    if (ticketId) {
+      markTicketViewed(ticketId);
+    }
+  }, [ticketId]);
 
   useEffect(() => {
     if (isManager || isAdmin) {
@@ -74,8 +85,12 @@ export default function TicketDetail() {
       });
       refetch();
       loadReplies();
+      showToast("Ticket assigned to you.", "success");
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to claim ticket");
+      showToast(
+        err.response?.data?.detail || "Failed to claim ticket",
+        "error",
+      );
     } finally {
       setClaiming(false);
     }
@@ -90,8 +105,32 @@ export default function TicketDetail() {
       });
       refetch();
       loadReplies();
+      showToast("Ticket delegated successfully.", "success");
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delegate ticket");
+      showToast(
+        err.response?.data?.detail || "Failed to delegate ticket",
+        "error",
+      );
+    } finally {
+      setDelegating(false);
+    }
+  }
+
+  async function handleDelegateDetail(targetAgentId) {
+    if (!targetAgentId) return;
+    setDelegating(true);
+    try {
+      await api.put(`/tickets/${ticketId}`, {
+        assigned_agent_id: targetAgentId,
+      });
+      refetch();
+      loadReplies();
+      showToast("Ticket delegated successfully.", "success");
+    } catch (err) {
+      showToast(
+        err.response?.data?.detail || "Failed to delegate ticket",
+        "error",
+      );
     } finally {
       setDelegating(false);
     }
@@ -197,15 +236,17 @@ export default function TicketDetail() {
                 </strong>
               </span>
             </span>
-            {!ticket.assigned_agent_id && (
-              <button
-                type="button"
-                onClick={handleTakeTicket}
-                className="rounded-lg border border-accent/40 bg-accent/20 px-3 py-1 text-xs font-semibold text-accent hover:bg-accent/30 transition-colors cursor-pointer"
-              >
-                Take Ticket
-              </button>
-            )}
+            {!ticket.assigned_agent_id &&
+              ticket.status !== "resolved" &&
+              ticket.status !== "closed" && (
+                <button
+                  type="button"
+                  onClick={handleTakeTicket}
+                  className="rounded-lg border border-accent/40 bg-accent/20 px-3 py-1 text-xs font-semibold text-accent hover:bg-accent/30 transition-colors cursor-pointer"
+                >
+                  Take Ticket
+                </button>
+              )}
             {(isManager || isAdmin) &&
               ticket.status !== "resolved" &&
               ticket.status !== "closed" && (
@@ -531,8 +572,56 @@ export default function TicketDetail() {
         )}
       </div>
 
-      {/* Reply Area: Locked until taken by agent/manager */}
+      {/* Reply Area: Locked until taken by agent/manager, or closed if resolved */}
       {(() => {
+        const isClosedOrResolved =
+          ticket.status === "resolved" || ticket.status === "closed";
+
+        if (isClosedOrResolved) {
+          return (
+            <div className="rounded-2xl border border-[#232838] bg-[#141824]/90 p-8 text-center shadow-lg">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-3">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
+              <h3 className="text-base font-semibold text-white capitalize">
+                Ticket is {ticket.status}
+              </h3>
+              <p className="mt-1.5 max-w-md mx-auto text-xs text-gray-400 leading-relaxed">
+                This ticket has been marked as {ticket.status}. No further
+                replies can be sent.
+              </p>
+
+              {/* Show Customer Rating & Feedback if available */}
+              {(ticket.rating || ticket.feedback) && (
+                <div className="mt-5 mx-auto max-w-md rounded-xl border border-[#232838] bg-[#181b26] p-4 text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-300">
+                      Customer Feedback
+                    </span>
+                    {ticket.rating && (
+                      <div className="flex items-center gap-1 bg-[#232838] px-2.5 py-0.5 rounded-lg border border-[#32374a]">
+                        <Star className="h-3 w-3 fill-[#f2b705] text-[#f2b705]" />
+                        <span className="text-xs font-bold text-white">
+                          {ticket.rating}.0
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {ticket.feedback ? (
+                    <p className="text-xs text-gray-300 italic">
+                      "{ticket.feedback}"
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      No text feedback provided.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        }
+
         const isAssignedToUser = ticket.assigned_agent_id === user?.id;
         const isUnassigned = !ticket.assigned_agent_id;
         const canReply = isAdmin || isAssignedToUser;

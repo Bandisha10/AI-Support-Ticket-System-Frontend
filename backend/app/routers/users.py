@@ -16,13 +16,17 @@ from backend.app.schemas.user import (
     AgentAvailabilityUpdate,
     AgentInvite,
     AgentInviteResponse,
+    CustomerSummaryRead,
+    CustomerTicketItemRead,
     DepartmentTeamMemberRead,
     UserRead,
     UserUpdate,
 )
 from backend.app.services import user_service
 
+
 router = APIRouter(prefix="/users", tags=["Users"])
+
 
 @router.post(
     "/invite-agent",
@@ -54,6 +58,59 @@ async def list_users(
         db=db, skip=skip, limit=limit, includes_archived=includes_archived
     )
 
+
+# --- Static routes placed BEFORE /{user_id} parameter to avoid 422 UUID collisions ---
+
+@router.get(
+    "/customers/summary",
+    response_model=list[CustomerSummaryRead],
+    dependencies=[Depends(require_role(UserRole.admin))],
+)
+async def list_customers_summary(
+    includes_archived: bool = True,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve all customers with ticket metrics and active/archive status."""
+    return await user_service.list_customers_summary_workflow(
+        db, includes_archived=includes_archived
+    )
+
+
+@router.get(
+    "/customers/{customer_id}/tickets",
+    response_model=list[CustomerTicketItemRead],
+    dependencies=[Depends(require_role(UserRole.admin))],
+)
+async def get_customer_tickets(
+    customer_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve all tickets belonging to a specific customer for inspection."""
+    return await user_service.get_customer_tickets_workflow(customer_id, db)
+
+
+@router.get("/department/team", response_model=list[DepartmentTeamMemberRead])
+async def list_department_team(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    is_manager = (
+        current_user.role == UserRole.agent
+        and getattr(current_user, "agent_tier", None) == AgentTier.manager
+    )
+    if not is_manager and current_user.role != UserRole.admin:
+        raise HTTPException(
+            403, "Only Managers and Admins can view department team members"
+        )
+
+    dept_id = current_user.department_id
+    if not dept_id:
+        return []
+
+    return await user_service.get_department_team_workflow(dept_id, db)
+
+
+# --- Parameterized /{user_id} routes ---
 
 @router.get(
     "/{user_id}",
@@ -120,24 +177,3 @@ async def update_agent_availability(
         db=db,
         current_user=current_user,
     )
-
-
-@router.get("/department/team", response_model=list[DepartmentTeamMemberRead])
-async def list_department_team(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    is_manager = (
-        current_user.role == UserRole.agent
-        and getattr(current_user, "agent_tier", None) == AgentTier.manager
-    )
-    if not is_manager and current_user.role != UserRole.admin:
-        raise HTTPException(
-            403, "Only Managers and Admins can view department team members"
-        )
-
-    dept_id = current_user.department_id
-    if not dept_id:
-        return []
-
-    return await user_service.get_department_team_workflow(dept_id, db)

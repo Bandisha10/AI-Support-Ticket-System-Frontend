@@ -3,6 +3,8 @@ import { ArrowUpDown, ArrowUp, ArrowDown, Building2 } from "lucide-react";
 import * as adminService from "../../services/adminService";
 import AgentInvite from "../../components/admin/AgentInvite";
 import { formatDateTime } from "../../utils/formatters";
+import { useToast } from "../../components/common/Toast";
+import ConfirmModal from "../../components/common/ConfirmModal";
 
 export default function MemberInvite() {
   const [users, setUsers] = useState([]);
@@ -12,6 +14,8 @@ export default function MemberInvite() {
   // Sorting state for Team Members table
   const [sortBy, setSortBy] = useState("name"); // "name" | "created_at"
   const [sortOrder, setSortOrder] = useState("asc"); // "asc" | "desc"
+  const { showToast } = useToast();
+  const [confirmModal, setConfirmModal] = useState(null);
 
   const handleHeaderSort = (field) => {
     if (sortBy === field) {
@@ -125,6 +129,48 @@ export default function MemberInvite() {
     });
   };
 
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+
+  // Toggle user availability (Active / Inactive) with ConfirmModal & Toast
+  const handleToggleUserStatus = (targetUser) => {
+    if (targetUser.role === "admin" || targetUser.is_archive) return;
+    const nextState = !targetUser.is_active;
+    const actionLabel = nextState ? "activate" : "deactivate";
+
+    setConfirmModal({
+      title: `${nextState ? "Activate" : "Deactivate"} Team Member`,
+      message: `Are you sure you want to ${actionLabel} ${
+        targetUser.first_name || targetUser.email
+      }? ${
+        !nextState
+          ? "Their open tickets will automatically be reassigned to the department manager."
+          : ""
+      }`,
+      confirmText: nextState ? "Activate" : "Deactivate",
+      variant: nextState ? "primary" : "danger",
+      onConfirm: async () => {
+        setActionLoadingId(targetUser.id);
+        try {
+          await adminService.updateAgentAvailability(targetUser.id, nextState);
+          setUsers((prev) =>
+            prev.map((u) =>
+              u.id === targetUser.id ? { ...u, is_active: nextState } : u,
+            ),
+          );
+          showToast(`User successfully ${actionLabel}d.`, "success");
+        } catch (err) {
+          showToast(
+            err.response?.data?.detail || `Failed to ${actionLabel} user`,
+            "error",
+          );
+        } finally {
+          setActionLoadingId(null);
+          setConfirmModal(null);
+        }
+      },
+    });
+  };
+
   // UPDATE DEPARTMENT ASSIGNMENT
   const updateAssignment = async (userId, dropdownValue) => {
     const previousUsers = [...users];
@@ -139,13 +185,17 @@ export default function MemberInvite() {
       });
       const freshUsers = await adminService.getUsers();
       setUsers(freshUsers.filter((u) => u.role !== "customer"));
+      showToast("Department assignment updated.", "success");
     } catch (e) {
       setUsers(previousUsers);
-      alert(e.response?.data?.detail || "Assignment update failed");
+      showToast(
+        e.response?.data?.detail || "Assignment update failed",
+        "error",
+      );
     }
   };
 
-  // UPDATE AGENT TIER (Regular vs Manager)
+  // UPDATE AGENT TIER
   const updateAgentTier = async (userId, tier) => {
     const newTier = Number(tier);
     const targetUser = users.find((u) => u.id === userId);
@@ -171,9 +221,13 @@ export default function MemberInvite() {
       await adminService.updateUserRole(userId, { agent_tier: newTier });
       const freshUsers = await adminService.getUsers();
       setUsers(freshUsers.filter((u) => u.role !== "customer"));
+      showToast("Agent tier updated.", "success");
     } catch (e) {
       setUsers(previousUsers);
-      alert(e.response?.data?.detail || "Agent tier update failed");
+      showToast(
+        e.response?.data?.detail || "Agent tier update failed",
+        "error",
+      );
     }
   };
 
@@ -347,16 +401,40 @@ export default function MemberInvite() {
                                   : "N/A"}
                               </span>
                               <div>
-                                {u.role === "admin" ? (
-                                  <span className="text-[#fbbf24] text-[10px] font-bold uppercase">
+                                {u.is_archive ? (
+                                  <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                                    ARCHIVED
+                                  </span>
+                                ) : u.role === "admin" ? (
+                                  <span className="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase bg-[#fbbf24]/10 text-[#fbbf24] border border-[#fbbf24]/30">
                                     ADMIN
                                   </span>
                                 ) : (
-                                  <span className="text-[#34d399] text-[10px] font-bold uppercase">
-                                    ACTIVE
-                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleUserStatus(u)}
+                                    disabled={actionLoadingId === u.id}
+                                    className={`inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                                      u.is_active
+                                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+                                        : "bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20"
+                                    }`}
+                                    title={`Click to mark ${u.is_active ? "Inactive (Off-duty)" : "Active (On-duty)"}`}
+                                  >
+                                    <span
+                                      className={`h-1.5 w-1.5 rounded-full ${
+                                        u.is_active
+                                          ? "bg-emerald-400"
+                                          : "bg-rose-400"
+                                      }`}
+                                    />
+                                    <span>
+                                      {u.is_active ? "ACTIVE" : "INACTIVE"}
+                                    </span>
+                                  </button>
                                 )}
                               </div>
+
                               <div>
                                 {u.role === "agent" ? (
                                   <select
@@ -407,6 +485,11 @@ export default function MemberInvite() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={Boolean(confirmModal)}
+        onClose={() => setConfirmModal(null)}
+        {...confirmModal}
+      />
     </div>
   );
 }

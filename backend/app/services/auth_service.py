@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -210,6 +210,13 @@ async def login_user_workflow(
     profile = result.scalar_one_or_none()
     if profile is None:
         raise HTTPException(404, "User profile not found. Please sign up first.")
+    # Guard: Prevent banned or archived users from logging in
+    if not profile.is_active or getattr(profile, "is_archive", False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Your account has been suspended or banned. Please contact support.",
+        )
+
 
     token_resp = TokenResponse(
         access_token=session.access_token,
@@ -246,8 +253,13 @@ async def refresh_session_workflow(
     if session is None or user is None:
         raise HTTPException(401, "Invalid refresh token")
 
-    result = await db.execute(select(User).where(User.id == user.id))
+    result = await db.execute(select(User).where(User.id == res.user.id))
     profile = result.scalar_one_or_none()
+    if profile is None or not profile.is_active or getattr(profile, "is_archive", False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Your account has been suspended or banned. Please contact support.",
+        )
 
     token_resp = TokenResponse(
         access_token=session.access_token,

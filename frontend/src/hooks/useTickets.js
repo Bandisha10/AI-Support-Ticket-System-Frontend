@@ -17,14 +17,18 @@ function formatErrorDetail(err) {
 export function useTickets(mode = "mine", params = {}) {
   const queryKey = ["tickets", mode, params];
 
-  const query = useQuery({
+    const query = useQuery({
     queryKey,
     queryFn: () =>
       mode === "queue"
         ? ticketService.getQueue(params)
         : ticketService.getMyTickets(params),
     placeholderData: (previousData) => previousData, // Keeps previous list visible during filter/page switches
+    refetchInterval: 20000, // Poll every 20s instead of every 4s to prevent DB congestion
+    staleTime: 30000, // Cache results for 30s so switching tabs is instant (0ms delay)
+    refetchOnWindowFocus: false, // Don't refetch every time user clicks in/out of browser tab
   });
+
 
   return {
     tickets: query.data || [],
