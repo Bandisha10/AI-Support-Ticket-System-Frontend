@@ -15,6 +15,7 @@ import {
   Headphones,
   Sparkles,
   ZoomIn,
+  UserCheck,
 } from "lucide-react";
 import { useTicketDetail } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
@@ -51,6 +52,7 @@ export default function TicketDetail() {
 
   const [teamMembers, setTeamMembers] = useState([]);
   const [delegating, setDelegating] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     if (isManager || isAdmin) {
@@ -61,6 +63,8 @@ export default function TicketDetail() {
   }, [isManager, isAdmin]);
 
   async function handleTakeTicket() {
+    if (claiming || ticket?.assigned_agent_id === user?.id) return;
+    setClaiming(true);
     try {
       await api.put(`/tickets/${ticketId}`, { assigned_agent_id: user.id });
       await api.post("/replies/", {
@@ -69,8 +73,11 @@ export default function TicketDetail() {
         is_system_log: true,
       });
       refetch();
+      loadReplies();
     } catch (err) {
       alert(err.response?.data?.detail || "Failed to claim ticket");
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -524,14 +531,87 @@ export default function TicketDetail() {
         )}
       </div>
 
-      {/* Reply Component */}
-      <ReplyBox
-        ticketId={ticketId}
-        onSent={() => {
-          refetch();
-          loadReplies();
-        }}
-      />
+      {/* Reply Area: Locked until taken by agent/manager */}
+      {(() => {
+        const isAssignedToUser = ticket.assigned_agent_id === user?.id;
+        const isUnassigned = !ticket.assigned_agent_id;
+        const canReply = isAdmin || isAssignedToUser;
+
+        if (canReply) {
+          return (
+            <ReplyBox
+              ticketId={ticketId}
+              onSent={() => {
+                refetch();
+                loadReplies();
+              }}
+            />
+          );
+        }
+
+        if (isUnassigned) {
+          return (
+            <div className="rounded-2xl border border-dashed border-[#232838] bg-[#141824]/90 p-8 text-center shadow-lg">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f2b705]/10 border border-[#f2b705]/20 text-[#f2b705] mb-3">
+                <Lock className="h-6 w-6" />
+              </div>
+              <h3 className="text-base font-semibold text-white">
+                Ticket is Unassigned
+              </h3>
+              <p className="mt-1.5 max-w-md mx-auto text-xs text-gray-400 leading-relaxed">
+                You can review all ticket details and conversation history
+                above. To reply to the customer, you must take this ticket
+                first. Once taken, it will appear in your{" "}
+                <strong>My Queue</strong> tab.
+              </p>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleTakeTicket}
+                  disabled={claiming}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#f2b705] hover:bg-[#ffd24d] disabled:opacity-50 disabled:cursor-not-allowed px-5 py-2.5 text-xs font-bold text-black transition-colors cursor-pointer shadow-md"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>
+                    {claiming ? "Claiming..." : "Take Ticket to Reply"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="rounded-2xl border border-[#232838] bg-[#141824]/90 p-8 text-center shadow-lg">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 mb-3">
+              <User className="h-6 w-6" />
+            </div>
+            <h3 className="text-base font-semibold text-white">
+              Ticket Assigned to Another Agent
+            </h3>
+            <p className="mt-1.5 max-w-md mx-auto text-xs text-gray-400 leading-relaxed">
+              This ticket is currently assigned to{" "}
+              <strong className="text-gray-200">
+                {teamMembers.find((m) => m.id === ticket.assigned_agent_id)
+                  ?.first_name || "another team member"}
+              </strong>
+              . Only the assigned agent or manager can reply.
+            </p>
+            {isManager && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleTakeTicket}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#f2b705] hover:bg-[#ffd24d] px-4 py-2 text-xs font-bold text-black transition-colors cursor-pointer shadow-md"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>Reassign to Me (Manager)</span>
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <ImageLightbox
         isOpen={Boolean(selectedImage)}

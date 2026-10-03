@@ -223,7 +223,7 @@ export default function TicketHistory() {
       {/* Resolved Tickets List */}
       <div className="space-y-3">
         {filteredTickets.map((ticket) => {
-          const userRating = ratings[ticket.id]?.rating;
+          const userRating = ticket.rating || ratings[ticket.id]?.rating;
 
           return (
             <div

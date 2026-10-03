@@ -8,6 +8,7 @@ import {
   ShieldAlert,
   Clock,
   History,
+  Filter,
 } from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
@@ -50,6 +51,9 @@ export default function AgentTicketPanel() {
   const [teamLoading, setTeamLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState(null);
 
+  // 'all' = full department history, 'mine' = individually solved by logged-in manager/agent
+  const [historyScope, setHistoryScope] = useState("all");
+
   // Filter out the manager so the availability modal only shows team members
   const departmentAgents = useMemo(() => {
     return teamMembers.filter(
@@ -69,9 +73,11 @@ export default function AgentTicketPanel() {
     return searchParams.get("sla_risk") === "true";
   }, []);
   const [filterSlaRisk, setFilterSlaRisk] = useState(initialSlaRisk);
+
   // Sync state changes with URL and localStorage
-  const handleTabChange = (mode) => {
+  const handleTabChange = (mode, scope = historyScope) => {
     setPanelMode(mode);
+    setCurrentPage(1);
     localStorage.setItem("deskwise_agent_panel_tab", mode);
     setSearchParams(
       (prev) => {
@@ -81,7 +87,21 @@ export default function AgentTicketPanel() {
       },
       { replace: true },
     );
+    const p = {};
+    if (mode === "mine" || mode === "my") {
+      p.assigned_to_me = true;
+    } else if (mode === "unassigned") {
+      p.status = "open";
+      p.unassigned_only = true;
+    } else if (mode === "all_dept") {
+      p.is_history = true;
+      if (scope === "mine") {
+        p.assigned_to_me = true; // Filters only tickets individually solved by this manager/agent
+      }
+    }
+    fetchTickets(p);
   };
+
   const handleToggleEscalations = () => {
     setFilterEscalations((prev) => {
       const nextVal = !prev;
@@ -149,15 +169,21 @@ export default function AgentTicketPanel() {
       p.unassigned = true;
     } else if (panelMode === "all_dept") {
       p.is_history = true;
+      if (historyScope === "mine") {
+        p.assigned_to_me = true;
+      }
     }
-    if (filterEscalations) {
-      p.escalated = true;
-    }
-    if (filterSlaRisk) {
-      p.sla_status = "all_risk";
+    // Only apply escalation and SLA risk filters when not on History table
+    if (panelMode !== "all_dept") {
+      if (filterEscalations) {
+        p.escalated = true;
+      }
+      if (filterSlaRisk) {
+        p.sla_status = "all_risk";
+      }
     }
     return p;
-  }, [panelMode, statusFilter, filterEscalations, filterSlaRisk]);
+  }, [panelMode, statusFilter, filterEscalations, filterSlaRisk, historyScope]);
 
   const { tickets, loading, refetch } = useTickets("queue", params);
 
@@ -165,14 +191,18 @@ export default function AgentTicketPanel() {
   const displayedTickets = useMemo(() => {
     if (!tickets) return [];
     if (panelMode === "all_dept") {
-      return tickets.filter(
+      const resolvedOrClosed = tickets.filter(
         (t) => t.status === "resolved" || t.status === "closed",
       );
+      if (historyScope === "mine") {
+        return resolvedOrClosed.filter((t) => t.assigned_agent_id === user?.id);
+      }
+      return resolvedOrClosed;
     }
     return tickets.filter(
       (t) => t.status !== "resolved" && t.status !== "closed",
     );
-  }, [tickets, panelMode]);
+  }, [tickets, panelMode, historyScope, user?.id]);
 
   const escalatedCount = useMemo(() => {
     return (tickets || []).filter(
@@ -254,6 +284,9 @@ export default function AgentTicketPanel() {
   };
 
   const handleClaimTicket = async (ticket) => {
+    if (actionLoadingId === ticket.id || ticket.assigned_agent_id === user?.id)
+      return;
+    setActionLoadingId(ticket.id);
     try {
       await api.put(`/tickets/${ticket.id}`, { assigned_agent_id: user.id });
       await api.post("/replies/", {
@@ -264,6 +297,8 @@ export default function AgentTicketPanel() {
       refetch();
     } catch (err) {
       alert("Failed to assign ticket to yourself.");
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -333,7 +368,6 @@ export default function AgentTicketPanel() {
               <span>Team Availability</span>
             </button>
           )}
-
           <button
             onClick={() => handleTabChange("mine")}
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-colors cursor-pointer ${
@@ -377,99 +411,124 @@ export default function AgentTicketPanel() {
           loading={loading}
           departments={departments}
           extraFilter={
-            <div className="flex items-center gap-2">
-              {/* Urgent Escalations (Manager only) */}
-              {isManager && (
+            panelMode === "all_dept" ? (
+              /* Dropdown for History table */
+              <div className="relative min-w-[190px]">
+                <select
+                  value={historyScope}
+                  onChange={(e) => {
+                    const newScope = e.target.value;
+                    setHistoryScope(newScope);
+                    handleTabChange("all_dept", newScope);
+                  }}
+                  className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-xs font-medium text-gray-200 focus:border-accent focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Department Solved</option>
+                  <option value="mine">Solved By Me</option>
+                </select>
+                <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+              </div>
+            ) : (
+              /* Urgent Escalations & SLA At Risk for active queues */
+              <div className="flex items-center gap-2">
+                {isManager && (
+                  <button
+                    type="button"
+                    onClick={handleToggleEscalations}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                      filterEscalations
+                        ? "bg-red-500 text-white shadow-md shadow-red-500/25"
+                        : "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20"
+                    }`}
+                    title="Filter tickets with High Priority or Negative Sentiment"
+                  >
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    <span>Urgent Escalations</span>
+                    {escalatedCount > 0 && (
+                      <span
+                        className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                          filterEscalations
+                            ? "bg-white text-red-600"
+                            : "bg-red-950/80 text-red-300 border border-red-500/40"
+                        }`}
+                      >
+                        {escalatedCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {/* SLA At Risk (Visible to both Manager and Regular Agents) */}
                 <button
                   type="button"
-                  onClick={handleToggleEscalations}
+                  onClick={handleToggleSlaRisk}
                   className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                    filterEscalations
-                      ? "bg-red-500 text-white shadow-md shadow-red-500/25"
-                      : "bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20"
+                    filterSlaRisk
+                      ? "bg-amber-500 text-black shadow-md shadow-amber-500/25 font-bold"
+                      : "bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
                   }`}
-                  title="Filter tickets with High Priority or Negative Sentiment"
+                  title="Filter tickets with breached SLA or approaching breach within 60 minutes"
                 >
-                  <ShieldAlert className="h-3.5 w-3.5" />
-                  <span>Urgent Escalations</span>
-                  {escalatedCount > 0 && (
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>SLA At Risk</span>
+                  {slaRiskCount > 0 && (
                     <span
                       className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                        filterEscalations
-                          ? "bg-white text-red-600"
-                          : "bg-red-950/80 text-red-300 border border-red-500/40"
+                        filterSlaRisk
+                          ? "bg-black text-amber-400"
+                          : "bg-amber-950/80 text-amber-300 border border-amber-500/40"
                       }`}
                     >
-                      {escalatedCount}
+                      {slaRiskCount}
                     </span>
                   )}
                 </button>
-              )}
-
-              {/* SLA At Risk (Visible to both Manager and Regular Agents) */}
-              <button
-                type="button"
-                onClick={handleToggleSlaRisk}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
-                  filterSlaRisk
-                    ? "bg-amber-500 text-black shadow-md shadow-amber-500/25 font-bold"
-                    : "bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                }`}
-                title="Filter tickets with breached SLA or approaching breach within 60 minutes"
-              >
-                <Clock className="h-3.5 w-3.5" />
-                <span>SLA At Risk</span>
-                {slaRiskCount > 0 && (
-                  <span
-                    className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                      filterSlaRisk
-                        ? "bg-black text-amber-400"
-                        : "bg-amber-950/80 text-amber-300 border border-amber-500/40"
-                    }`}
-                  >
-                    {slaRiskCount}
-                  </span>
-                )}
-              </button>
-            </div>
-          }
-          renderActions={(ticket) => {
-            const isAssignedToCurrent = ticket.assigned_agent_id === user?.id;
-            const isUnassigned = !ticket.assigned_agent_id;
-            return (
-              <div className="flex items-center gap-2">
-                {isUnassigned ? (
-                  <button
-                    onClick={() => handleClaimTicket(ticket)}
-                    className="text-xs bg-[#f2b705]/20 hover:bg-[#f2b705]/30 text-[#f2b705] font-semibold border border-[#f2b705]/40 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Take Ticket
-                  </button>
-                ) : isAssignedToCurrent ? (
-                  ticket.status !== "resolved" && ticket.status !== "closed" ? (
-                    <button
-                      onClick={() =>
-                        handleQuickStatusChange(ticket, "resolved")
-                      }
-                      className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-semibold border border-emerald-500/30 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                    >
-                      Resolve
-                    </button>
-                  ) : null
-                ) : null}
-
-                {(isManager || user?.role === "admin") && (
-                  <button
-                    onClick={() => handleReassignToTriage(ticket)}
-                    className="text-xs bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/40 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                    title="Send back to admin triage"
-                  >
-                    Triage
-                  </button>
-                )}
               </div>
-            );
-          }}
+            )
+          }
+          renderActions={
+            panelMode === "all_dept"
+              ? null
+              : (ticket) => {
+                  const isAssignedToCurrent =
+                    ticket.assigned_agent_id === user?.id;
+                  const isUnassigned = !ticket.assigned_agent_id;
+                  return (
+                    <div className="flex items-center gap-2">
+                      {isUnassigned ? (
+                        <button
+                          onClick={() => handleClaimTicket(ticket)}
+                          className="text-xs bg-[#f2b705]/20 hover:bg-[#f2b705]/30 text-[#f2b705] font-semibold border border-[#f2b705]/40 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Take Ticket
+                        </button>
+                      ) : isAssignedToCurrent ? (
+                        ticket.status !== "resolved" &&
+                        ticket.status !== "closed" ? (
+                          <button
+                            onClick={() =>
+                              handleQuickStatusChange(ticket, "resolved")
+                            }
+                            className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 font-semibold border border-emerald-500/30 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                          >
+                            Resolve
+                          </button>
+                        ) : null
+                      ) : null}
+
+                      {(isManager || user?.role === "admin") && (
+                        <button
+                          onClick={() => handleReassignToTriage(ticket)}
+                          className="text-xs bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/40 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                          title="Send back to admin triage"
+                        >
+                          Triage
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+          }
         />
       </div>
 
