@@ -21,25 +21,64 @@ export function NotificationProvider({ children }) {
 
   // 1. Isolate notifications per user account (prevents cross-role data leaks)
   useEffect(() => {
-    if (!user?.id) {
-      setNotifications([]);
-      previousTicketsRef.current.clear();
-      initialLoadRef.current = true;
-      return;
+    if (!user?.id) return;
+    let isMounted = true;
+    async function checkTicketUpdates() {
+      try {
+        const tickets =
+          user.role === "agent" || user.role === "admin"
+            ? await ticketService.getQueue()
+            : await ticketService.getMyTickets();
+        if (!isMounted || !Array.isArray(tickets)) return;
+        const currentMap = new Map();
+        const newNotifs = [];
+        tickets.forEach((t) => {
+          currentMap.set(t.id, t);
+          const prev = previousTicketsRef.current.get(t.id);
+          if (!initialLoadRef.current) {
+            if (!prev) {
+              const isAssignedToMe = t.assigned_agent_id === user.id;
+              newNotifs.push({
+                id: `notif-${t.id}-created-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                ticketId: t.id,
+                type: isAssignedToMe ? "assignment" : "new_ticket",
+                title: isAssignedToMe
+                  ? "New Ticket Assigned"
+                  : "New Ticket Created",
+                message: `#${t.id.slice(0, 8)}: ${t.subject}`,
+                timestamp: new Date().toISOString(),
+                read: false,
+              });
+            }
+          }
+        });
+        previousTicketsRef.current = currentMap;
+        initialLoadRef.current = false;
+        if (newNotifs.length > 0) {
+          setNotifications((prev) => [...newNotifs, ...prev].slice(0, 50));
+        }
+      } catch (err) {
+        // Silently catch background poll errors
+      }
     }
-    try {
-      const stored = localStorage.getItem(getStorageKey(user.id));
-      setNotifications(stored ? JSON.parse(stored) : []);
-    } catch {
-      setNotifications([]);
-    }
-  }, [user?.id]);
+    // Delay initial check by 2 seconds so page-specific queries finish first
+    const initialTimer = setTimeout(checkTicketUpdates, 2000);
+    const interval = setInterval(checkTicketUpdates, 30000);
+    return () => {
+      isMounted = false;
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [user?.id, user?.role]);
 
   // Sync to user-scoped localStorage
   useEffect(() => {
     if (user?.id) {
       try {
-        localStorage.setItem(getStorageKey(user.id), JSON.stringify(notifications));
+        localStorage.setItem(
+          getStorageKey(user.id),
+          JSON.stringify(notifications),
+        );
       } catch {}
     }
   }, [notifications, user?.id]);
@@ -74,7 +113,9 @@ export function NotificationProvider({ children }) {
                 id: `notif-${t.id}-created-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 ticketId: t.id,
                 type: isAssignedToMe ? "assignment" : "new_ticket",
-                title: isAssignedToMe ? "New Ticket Assigned" : "New Ticket Created",
+                title: isAssignedToMe
+                  ? "New Ticket Assigned"
+                  : "New Ticket Created",
                 message: `#${t.id.slice(0, 8)}: ${t.subject}`,
                 timestamp: new Date().toISOString(),
                 read: false,
@@ -141,7 +182,9 @@ export function NotificationProvider({ children }) {
             ) {
               const dueTime = new Date(t.sla_due_at).getTime();
               const nowTime = Date.now();
-              const wasBreached = prev?.sla_due_at ? new Date(prev.sla_due_at).getTime() <= nowTime : false;
+              const wasBreached = prev?.sla_due_at
+                ? new Date(prev.sla_due_at).getTime() <= nowTime
+                : false;
               if (dueTime <= nowTime && !wasBreached) {
                 newNotifs.push({
                   id: `notif-${t.id}-sla-breach-${Date.now()}`,
@@ -179,7 +222,7 @@ export function NotificationProvider({ children }) {
 
   function markAsRead(id) {
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
   }
 

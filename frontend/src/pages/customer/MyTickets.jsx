@@ -9,11 +9,13 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  ArrowUpDown,
 } from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
 import TicketStatus from "../../components/customer/TicketStatus";
 import Loader from "../../components/common/Loader";
 import Button from "../../components/common/Button";
+import { markTicketViewed } from "../../utils/ticketViewTracking";
 
 export default function MyTickets() {
   const { tickets, loading, error } = useTickets("mine");
@@ -26,6 +28,7 @@ export default function MyTickets() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [sortOrder, setSortOrder] = useState("opened_desc"); // "opened_desc" or "opened_asc"
 
   // Debounce search input by 300ms
   useEffect(() => {
@@ -48,9 +51,9 @@ export default function MyTickets() {
     );
   }, [tickets]);
 
-  // Client-side filtering
+  // Client-side filtering & sorting
   const filteredTickets = useMemo(() => {
-    return activeTickets.filter((t) => {
+    const list = activeTickets.filter((t) => {
       const matchSearch =
         !debouncedSearch.trim() ||
         t.subject?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
@@ -65,7 +68,13 @@ export default function MyTickets() {
 
       return matchSearch && matchStatus;
     });
-  }, [activeTickets, debouncedSearch, statusFilter]);
+
+    return list.sort((a, b) => {
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      return sortOrder === "opened_asc" ? timeA - timeB : timeB - timeA;
+    });
+  }, [activeTickets, debouncedSearch, statusFilter, sortOrder]);
 
   // Pagination Calculations
   const totalItems = filteredTickets.length;
@@ -158,7 +167,7 @@ export default function MyTickets() {
       <div className="mb-6 rounded-xl border border-surface-border bg-surface-card p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
           {/* Search Box */}
-          <div className="relative sm:col-span-8">
+          <div className="relative sm:col-span-6">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
@@ -170,7 +179,7 @@ export default function MyTickets() {
           </div>
 
           {/* Status Filter */}
-          <div className="relative sm:col-span-4">
+          <div className="relative sm:col-span-3">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -182,6 +191,22 @@ export default function MyTickets() {
               <option value="pending">Pending</option>
             </select>
             <Filter className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
+          </div>
+
+          {/* Sort By Open Time */}
+          <div className="relative sm:col-span-3">
+            <select
+              value={sortOrder}
+              onChange={(e) => {
+                setSortOrder(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full appearance-none rounded-lg border border-surface-border bg-surface-bg py-2 pl-3 pr-8 text-sm text-gray-200 focus:border-accent focus:outline-none"
+            >
+              <option value="opened_desc">Newest Opened First</option>
+              <option value="opened_asc">Oldest Opened First</option>
+            </select>
+            <ArrowUpDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500" />
           </div>
         </div>
 
@@ -235,6 +260,7 @@ export default function MyTickets() {
           <Link
             key={t.id}
             to={`/tickets/${t.id}`}
+            onClick={() => markTicketViewed(t.id)}
             className="block transition-transform hover:-translate-y-0.5"
           >
             <TicketStatus ticket={t} />

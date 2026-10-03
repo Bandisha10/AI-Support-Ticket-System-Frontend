@@ -10,6 +10,8 @@ import {
 import Button from "../common/Button";
 import { useToast } from "../common/Toast";
 import * as ticketService from "../../services/ticketService";
+import { useQueryClient } from "@tanstack/react-query";
+
 function formatFileSize(bytes) {
   if (bytes === 0) return "0 Bytes";
   const k = 1024;
@@ -32,6 +34,7 @@ export default function ReplyBox({ ticketId, onSent }) {
   const [cannedReplies, setCannedReplies] = useState([]);
   const [showTemplates, setShowTemplates] = useState(false);
   const templateMenuRef = useRef(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     ticketService
@@ -130,6 +133,7 @@ export default function ReplyBox({ ticketId, onSent }) {
 
       if (hasMessage) {
         await ticketService.sendAgentReply(ticketId, message);
+        queryClient.invalidateQueries({ queryKey: ["tickets"] });
       }
       // Cleanup preview URLs
       attachments.forEach((a) => {
@@ -191,11 +195,16 @@ export default function ReplyBox({ ticketId, onSent }) {
             </button>
 
             {showTemplates && (
-              <div className="fixed inset-x-4 top-1/4 z-50 max-w-xs mx-auto sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:w-72 rounded-xl border border-surface-border bg-surface-card p-2 shadow-2xl animate-in fade-in">
-                <p className="px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
-                  Canned Responses
-                </p>
-                <div className="max-h-56 space-y-1 overflow-y-auto">
+              <div className="fixed inset-x-4 top-1/4 z-50 max-w-sm mx-auto sm:absolute sm:inset-auto sm:left-0 sm:top-full sm:mt-2 sm:w-80 rounded-xl border border-surface-border bg-surface-card p-2 shadow-2xl animate-in fade-in">
+                <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-[#232632] mb-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                    Canned Responses
+                  </p>
+                  <span className="text-[10px] text-gray-500">
+                    {cannedReplies.length} available
+                  </span>
+                </div>
+                <div className="max-h-72 space-y-1 overflow-y-auto">
                   {cannedReplies.map((t) => (
                     <button
                       key={t.id}
@@ -203,9 +212,14 @@ export default function ReplyBox({ ticketId, onSent }) {
                       onClick={() => handleApplyTemplate(t)}
                       className="w-full rounded-lg px-2.5 py-2 text-left text-xs transition-colors hover:bg-surface-hover group"
                     >
-                      <p className="font-medium text-gray-200 group-hover:text-accent">
-                        {t.title}
-                      </p>
+                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                        <p className="font-medium text-gray-200 group-hover:text-accent truncate">
+                          {t.title}
+                        </p>
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[#181b26] border border-[#262a38] text-gray-400 shrink-0">
+                          {t.category}
+                        </span>
+                      </div>
                       <p className="line-clamp-1 text-[11px] text-gray-500">
                         {t.body}
                       </p>
