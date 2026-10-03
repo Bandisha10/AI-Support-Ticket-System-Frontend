@@ -1,6 +1,6 @@
-# Project Structure
+# Project Structure — Deskwise
 
-```
+```text
 ├── alembic
 │   ├── versions/
 │   ├── env.py
@@ -24,7 +24,6 @@
 │   │   ├── models
 │   │   │   ├── __init__.py
 │   │   │   ├── attachment.py
-│   │   │   ├── category.py
 │   │   │   ├── department.py
 │   │   │   ├── enums.py
 │   │   │   ├── reply.py
@@ -97,6 +96,7 @@
 │   │   │   │   └── TicketTable.jsx
 │   │   │   ├── common
 │   │   │   │   ├── Button.jsx
+│   │   │   │   ├── ConfirmModal.jsx
 │   │   │   │   ├── DotGrid.jsx
 │   │   │   │   ├── ErrorBoundary.jsx
 │   │   │   │   ├── ImageLightbox.jsx
@@ -124,6 +124,7 @@
 │   │   ├── pages
 │   │   │   ├── admin
 │   │   │   │   ├── Analytics.jsx
+│   │   │   │   ├── CustomerManagement.jsx
 │   │   │   │   ├── MemberInvite.jsx
 │   │   │   │   └── TicketPanel.jsx
 │   │   │   ├── agent
@@ -157,7 +158,8 @@
 │   │   │   ├── formatters.js
 │   │   │   ├── passwordRules.js
 │   │   │   ├── phoneFormat.js
-│   │   │   └── supabase.js
+│   │   │   ├── supabase.js
+│   │   │   └── ticketViewTracking.js
 │   │   ├── App.jsx
 │   │   ├── index.css
 │   │   └── main.jsx
