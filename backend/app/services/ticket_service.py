@@ -553,26 +553,30 @@ async def list_tickets_workflow(
         query = query.where(Ticket.customer_id == current_user.id)
         
     elif current_user.role == UserRole.agent:
-        if assigned_to_me:
-            query = query.where(Ticket.assigned_agent_id == current_user.id)
+        # Agents can ONLY see tickets within their own assigned department
+        if not current_user.department_id:
+            # Agent without a department sees nothing
+            query = query.where(sa_func.false())
+        elif assigned_to_me:
+            query = query.where(
+                Ticket.assigned_agent_id == current_user.id,
+                Ticket.department_id == current_user.department_id,
+            )
         elif unassigned:
             query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None)),
+                Ticket.department_id == current_user.department_id,
                 Ticket.assigned_agent_id.is_(None),
             )
         elif assigned_agent_id:
             query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None)),
+                Ticket.department_id == current_user.department_id,
                 Ticket.assigned_agent_id == assigned_agent_id,
             )
         else:
             query = query.where(
-                (Ticket.department_id == current_user.department_id)
-                | (Ticket.department_id.is_(None))
-                | (Ticket.assigned_agent_id == current_user.id)
+                Ticket.department_id == current_user.department_id,
             )
+
 
     elif current_user.role == UserRole.admin:
         if not status_ and not is_history:
@@ -734,12 +738,12 @@ async def get_ticket_workflow(
     
     if current_user.role == UserRole.agent:
         is_in_dept = (
-            ticket.department_id is None
-            or current_user.department_id is None
-            or ticket.department_id == current_user.department_id
+            current_user.department_id is not None
+            and ticket.department_id == current_user.department_id
         )
-        if not is_in_dept and ticket.assigned_agent_id != current_user.id:
+        if not is_in_dept:
             raise HTTPException(403, "Not allowed to view tickets outside your department")
+
 
 
     attachments = await get_ticket_attachments(ticket.id, db)
