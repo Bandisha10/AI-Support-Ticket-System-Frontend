@@ -9,8 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func as sa_func
-from sqlalchemy import select
+from sqlalchemy import case, func as sa_func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -531,3 +530,124 @@ async def get_user_workflow(user_id: UUID, db: AsyncSession) -> User:
     if not obj or is_super_admin(obj):
         raise HTTPException(404, "User not found")
     return obj
+
+async def list_customers_summary_workflow(
+    db: AsyncSession,
+    includes_archived: bool = True,
+) -> list[dict]:
+    """Retrieves all customers with aggregated ticket metrics and account statuses."""
+    ticket_subq = (
+        select(
+            Ticket.customer_id,
+            sa_func.count(Ticket.id).label("total_tickets"),
+            sa_func.count(
+                case(
+                    (
+                        Ticket.status.in_(
+                            [
+                                TicketStatus.open,
+                                TicketStatus.in_progress,
+                                TicketStatus.pending,
+                            ]
+                        ),
+                        Ticket.id,
+                    )
+                )
+            ).label("open_tickets"),
+            sa_func.count(
+                case((Ticket.status == TicketStatus.resolved, Ticket.id))
+            ).label("resolved_tickets"),
+            sa_func.count(
+                case((Ticket.status == TicketStatus.closed, Ticket.id))
+            ).label("closed_tickets"),
+        )
+        .group_by(Ticket.customer_id)
+        .subquery()
+    )
+
+    query = (
+        select(
+            User.id,
+            User.email,
+            User.first_name,
+            User.last_name,
+            User.phone_number,
+            User.created_at,
+            User.is_active,
+            User.is_archive,
+            sa_func.coalesce(ticket_subq.c.total_tickets, 0).label("total_tickets"),
+            sa_func.coalesce(ticket_subq.c.open_tickets, 0).label("open_tickets"),
+            sa_func.coalesce(ticket_subq.c.resolved_tickets, 0).label("resolved_tickets"),
+            sa_func.coalesce(ticket_subq.c.closed_tickets, 0).label("closed_tickets"),
+        )
+        .outerjoin(ticket_subq, ticket_subq.c.customer_id == User.id)
+        .where(User.role == UserRole.customer)
+    )
+
+    if not includes_archived:
+        query = query.where(User.is_archive.is_(False))
+
+    query = query.order_by(User.created_at.desc())
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "id": r.id,
+            "email": r.email,
+            "first_name": r.first_name,
+            "last_name": r.last_name,
+            "phone_number": r.phone_number,
+            "created_at": r.created_at,
+            "is_active": r.is_active,
+            "is_archive": r.is_archive,
+            "total_tickets": int(r.total_tickets or 0),
+            "open_tickets": int(r.open_tickets or 0),
+            "resolved_tickets": int(r.resolved_tickets or 0),
+            "closed_tickets": int(r.closed_tickets or 0),
+        }
+        for r in rows
+    ]
+
+
+async def get_customer_tickets_workflow(
+    customer_id: UUID,
+    db: AsyncSession,
+) -> list[dict]:
+    """Retrieves all tickets belonging to a specific customer for inspection."""
+    from backend.app.models.department import Department
+
+    query = (
+        select(
+            Ticket.id,
+            Ticket.subject,
+            Ticket.status,
+            Ticket.priority,
+            Ticket.sentiment,
+            Ticket.created_at,
+            Ticket.updated_at,
+            Department.name.label("department_name"),
+            User.email.label("assigned_agent_email"),
+        )
+        .outerjoin(Department, Ticket.department_id == Department.id)
+        .outerjoin(User, Ticket.assigned_agent_id == User.id)
+        .where(Ticket.customer_id == customer_id)
+        .order_by(Ticket.created_at.desc())
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        {
+            "id": r.id,
+            "subject": r.subject,
+            "status": str(r.status.value if hasattr(r.status, "value") else r.status),
+            "priority": str(r.priority.value if hasattr(r.priority, "value") else r.priority),
+            "sentiment": str(r.sentiment.value if hasattr(r.sentiment, "value") else r.sentiment) if r.sentiment else None,
+            "created_at": r.created_at,
+            "updated_at": r.updated_at,
+            "department_name": r.department_name or "Unassigned",
+            "assigned_agent_email": r.assigned_agent_email or "Unassigned",
+        }
+        for r in rows
+    ]

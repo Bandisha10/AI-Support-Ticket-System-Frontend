@@ -67,3 +67,30 @@ class AgentInviteResponse(BaseModel):
 
 class AgentAvailabilityUpdate(BaseModel):
     is_active: bool
+
+class CustomerTicketItemRead(BaseModel):
+    id: UUID
+    subject: str
+    status: str
+    priority: str
+    sentiment: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+    department_name: str | None = None
+    assigned_agent_email: str | None = None
+
+
+class CustomerSummaryRead(BaseModel):
+    id: UUID
+    email: EmailStr
+    first_name: str | None = None
+    last_name: str | None = None
+    phone_number: str | None = None
+    created_at: datetime
+    is_active: bool
+    is_archive: bool = False
+    total_tickets: int = 0
+    open_tickets: int = 0
+    resolved_tickets: int = 0
+    closed_tickets: int = 0
+    model_config = ConfigDict(from_attributes=True)

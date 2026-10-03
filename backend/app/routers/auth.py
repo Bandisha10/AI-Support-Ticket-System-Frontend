@@ -5,6 +5,7 @@ Clean HTTP controller delegating authentication workflows to auth_service.
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import settings
@@ -35,7 +36,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     response.set_cookie(
         key="refresh_token",
@@ -47,7 +47,6 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         max_age=30 * 24 * 3600,  # 30 days
     )
 
-
 def _delete_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         key="refresh_token",
@@ -56,13 +55,11 @@ def _delete_refresh_cookie(response: Response) -> None:
         samesite="lax",
     )
 
-
 @router.post("/signup", status_code=201)
 @limiter.limit("10/hour")
 async def signup(request: Request, payload: SignUpRequest, db: AsyncSession = Depends(get_db)):
 
     return await auth_service.signup_user_workflow(payload, db)
-
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
@@ -75,7 +72,6 @@ async def login(
     token_resp, refresh_token = await auth_service.login_user_workflow(payload, db)
     _set_refresh_cookie(response, refresh_token)
     return token_resp
-
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(
@@ -101,7 +97,6 @@ async def refresh(
     _set_refresh_cookie(response, new_refresh_token)
     return token_resp
 
-
 @router.post("/logout")
 async def logout(
     response: Response,
@@ -119,14 +114,12 @@ async def logout(
         )
     return {"message": "Logged out", "session_revoked": revoked}
 
-
 @router.get("/me", response_model=UserRead)
 async def me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await auth_service.get_me_workflow(current_user, db)
-
 
 @router.put("/me", response_model=UserRead)
 async def update_my_profile(
@@ -136,7 +129,6 @@ async def update_my_profile(
 ):
     """Allows the signed-in user to update their own contact information."""
     return await auth_service.update_my_profile_workflow(payload, current_user, db)
-
 
 @router.post("/change-password", response_model=PasswordChangedResponse)
 async def change_password(

@@ -2,6 +2,7 @@
 Reply Service Module.
 Handles validation, RBAC checks, internal note visibility, and CRUD operations for ticket replies.
 """
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -74,6 +75,9 @@ async def create_reply_workflow(
         data["is_system_log"] = False
 
     new_reply = await reply_crud.create(db, data)
+    ticket.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    
     return ReplyRead(
         id=new_reply.id,
         ticket_id=new_reply.ticket_id,
