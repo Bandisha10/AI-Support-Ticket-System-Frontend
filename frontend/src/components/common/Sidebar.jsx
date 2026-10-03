@@ -15,6 +15,7 @@ import {
   KeyRound,
   MoreVertical,
   UserPlus,
+  Users,
   X,
   Loader2,
   Building2,
@@ -229,9 +230,11 @@ export default function Sidebar({ isOpen = false, onClose = () => {} }) {
       return [
         { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
         { label: "Tickets Panel", to: "/admin/ticket-panel", icon: Ticket },
+        { label: "Customers", to: "/admin/customers", icon: Users },
         { label: "Member Invite", to: "/admin/member-invite", icon: UserPlus },
       ];
     }
+
     if (isAgent) {
       return [
         {

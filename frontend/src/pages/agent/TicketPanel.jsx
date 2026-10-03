@@ -14,6 +14,8 @@ import { useTickets } from "../../hooks/useTickets";
 import { useAuth } from "../../hooks/useAuth";
 import TicketTable from "../../components/agent/TicketTable";
 import api from "../../services/api";
+import { useToast } from "../../components/common/Toast";
+import ConfirmModal from "../../components/common/ConfirmModal";
 import {
   getDepartmentTeam,
   updateAgentAvailability,
@@ -27,6 +29,8 @@ export default function AgentTicketPanel() {
     user?.agent_tier === "manager";
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const { showToast } = useToast();
+  const [confirmModal, setConfirmModal] = useState(null);
 
   // Load initial tab from URL query param ?tab=... or localStorage fallback
   const initialMode = useMemo(() => {
@@ -263,23 +267,40 @@ export default function AgentTicketPanel() {
     }
   };
 
-  const handleToggleAvailability = async (agent) => {
+  const handleToggleAvailability = (agent) => {
     const nextState = !agent.is_active;
+
+    const performUpdate = async () => {
+      setActionLoadingId(agent.id);
+      try {
+        await updateAgentAvailability(agent.id, nextState);
+        await loadTeam();
+        refetch();
+        showToast(
+          `Agent marked ${nextState ? "Active (On-duty)" : "Inactive (Off-duty)"}.`,
+          "success",
+        );
+      } catch (err) {
+        showToast(
+          err.response?.data?.detail || "Failed to update availability",
+          "error",
+        );
+      } finally {
+        setActionLoadingId(null);
+        setConfirmModal(null);
+      }
+    };
+
     if (!nextState) {
-      const confirmDeactivate = window.confirm(
-        `Mark ${agent.first_name || agent.email} as Inactive? All their active tickets will automatically be reassigned to your Manager queue.`,
-      );
-      if (!confirmDeactivate) return;
-    }
-    setActionLoadingId(agent.id);
-    try {
-      await updateAgentAvailability(agent.id, nextState);
-      await loadTeam();
-      refetch();
-    } catch (err) {
-      alert(err.response?.data?.detail || "Failed to update availability");
-    } finally {
-      setActionLoadingId(null);
+      setConfirmModal({
+        title: "Deactivate Agent",
+        message: `Mark ${agent.first_name || agent.email} as Inactive? All their active tickets will automatically be reassigned to your Manager queue.`,
+        confirmText: "Deactivate",
+        variant: "danger",
+        onConfirm: performUpdate,
+      });
+    } else {
+      performUpdate();
     }
   };
 
@@ -295,30 +316,49 @@ export default function AgentTicketPanel() {
         is_system_log: true,
       });
       refetch();
+      showToast("Ticket assigned to you.", "success");
     } catch (err) {
-      alert("Failed to assign ticket to yourself.");
+      showToast(
+        err.response?.data?.detail || "Failed to assign ticket to yourself.",
+        "error",
+      );
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleReassignToTriage = async (ticket) => {
-    if (!window.confirm("Send this ticket back to admin triage?")) return;
-    try {
-      await api.put(`/tickets/${ticket.id}`, {
-        department_id: null,
-        assigned_agent_id: null,
-        status: "open",
-      });
-      await api.post("/replies/", {
-        ticket_id: ticket.id,
-        body: `Manager ${user.email} reassigned ticket to Admin Triage (Invalid Department).`,
-        is_system_log: true,
-      });
-      refetch();
-    } catch (err) {
-      alert(err.response?.data?.detail || "Failed to reassign ticket.");
-    }
+  const handleReassignToTriage = (ticket) => {
+    setConfirmModal({
+      title: "Return to Admin Triage",
+      message:
+        "Are you sure you want to unassign this ticket and return it to the admin triage queue?",
+      confirmText: "Send to Triage",
+      variant: "warning",
+      onConfirm: async () => {
+        setActionLoadingId(ticket.id);
+        try {
+          await api.put(`/tickets/${ticket.id}`, {
+            department_id: null,
+            assigned_agent_id: null,
+          });
+          await api.post("/replies/", {
+            ticket_id: ticket.id,
+            body: `Manager ${user.email} returned ticket to admin triage queue.`,
+            is_system_log: true,
+          });
+          refetch();
+          showToast("Ticket returned to admin triage.", "success");
+        } catch (err) {
+          showToast(
+            err.response?.data?.detail || "Failed to reassign ticket.",
+            "error",
+          );
+        } finally {
+          setActionLoadingId(null);
+          setConfirmModal(null);
+        }
+      },
+    });
   };
 
   const handleQuickStatusChange = async (ticket, newStatus) => {
@@ -410,6 +450,7 @@ export default function AgentTicketPanel() {
           tickets={displayedTickets}
           loading={loading}
           departments={departments}
+          isHistory={panelMode === "all_dept"}
           extraFilter={
             panelMode === "all_dept" ? (
               /* Dropdown for History table */
@@ -608,6 +649,11 @@ export default function AgentTicketPanel() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={Boolean(confirmModal)}
+        onClose={() => setConfirmModal(null)}
+        {...confirmModal}
+      />
     </div>
   );
 }

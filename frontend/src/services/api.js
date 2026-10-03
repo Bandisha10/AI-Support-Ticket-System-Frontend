@@ -113,7 +113,18 @@ api.interceptors.response.use(
     }
 
     // Backend blocks every other route until the temporary password is replaced.
-    const detail = error.response?.data?.detail || "";
+   const detail = error.response?.data?.detail || "";
+    // Auto-logout if user account has been banned/deactivated or archived
+    if (
+      error.response?.status === 403 &&
+      (detail.includes("temporarily deactivated") ||
+       detail.includes("closed or archived") ||
+       detail.includes("suspended or banned"))
+    ) {
+      clearSessionAndRedirect();
+      return Promise.reject(error);
+    }
+    // Backend blocks every other route until the temporary password is replaced.
     if (
       error.response?.status === 403 &&
       detail.startsWith("Password change required") &&
@@ -121,7 +132,6 @@ api.interceptors.response.use(
     ) {
       window.location.href = "/change-password";
     }
-
     return Promise.reject(error);
   }
 );

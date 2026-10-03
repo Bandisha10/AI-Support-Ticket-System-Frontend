@@ -4,10 +4,11 @@ import { Building2, Calendar, X } from "lucide-react";
 import { useTickets } from "../../hooks/useTickets";
 import TicketTable from "../../components/agent/TicketTable";
 import api from "../../services/api";
+import { useToast } from "../../components/common/Toast";
 
 export default function AdminTicketPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
-
+  const { showToast } = useToast();
   // Load initial tab from URL query param ?tab=... or localStorage fallback
   const initialFilter = useMemo(() => {
     const urlTab = searchParams.get("tab");
@@ -23,14 +24,14 @@ export default function AdminTicketPanel() {
 
   const [filter, setFilter] = useState(initialFilter);
   const [selectedDept, setSelectedDept] = useState(
-    searchParams.get("department_id") || "all"
+    searchParams.get("department_id") || "all",
   );
   const [dateFilter, setDateFilter] = useState(
     searchParams.get("date_range") ||
-      (searchParams.get("created_at") ? "custom" : "all")
+      (searchParams.get("created_at") ? "custom" : "all"),
   );
   const [customDate, setCustomDate] = useState(
-    searchParams.get("created_at") || ""
+    searchParams.get("created_at") || "",
   );
 
   const handleFilterChange = (mode) => {
@@ -42,7 +43,7 @@ export default function AdminTicketPanel() {
         next.set("tab", mode);
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -58,7 +59,7 @@ export default function AdminTicketPanel() {
         }
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -84,7 +85,7 @@ export default function AdminTicketPanel() {
         }
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -101,7 +102,7 @@ export default function AdminTicketPanel() {
         }
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -117,7 +118,7 @@ export default function AdminTicketPanel() {
         next.delete("created_at");
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -133,7 +134,7 @@ export default function AdminTicketPanel() {
           next.set("tab", filter);
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     }
   }, [searchParams]);
@@ -185,7 +186,6 @@ export default function AdminTicketPanel() {
   }, []);
 
   const handleAssignDepartment = async (ticketId, departmentId) => {
-    if (!departmentId) return;
     try {
       await api.put(`/tickets/${ticketId}`, {
         department_id: departmentId,
@@ -197,9 +197,13 @@ export default function AdminTicketPanel() {
         is_system_log: true,
       });
       refetch();
+      showToast("Ticket assigned to department.", "success");
     } catch (err) {
       console.error("Failed to assign department", err);
-      alert("Failed to assign department.");
+      showToast(
+        err.response?.data?.detail || "Failed to assign department.",
+        "error",
+      );
     }
   };
 

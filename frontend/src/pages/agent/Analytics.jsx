@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   Download,
   Star,
@@ -589,9 +590,12 @@ export default function AgentAnalytics() {
                 className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-white truncate">
+                  <Link
+                    to={`/agent/tickets/${t.id}`}
+                    className="text-xs font-semibold text-white truncate hover:text-[#f2b705] transition-colors block"
+                  >
                     {t.subject}
-                  </p>
+                  </Link>
                   {t.feedback ? (
                     <p className="text-[11px] text-gray-400 italic mt-0.5">
                       "{t.feedback}"
