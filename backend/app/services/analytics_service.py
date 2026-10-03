@@ -452,9 +452,13 @@ async def get_agent_analytics(
     end_date: str | None = None,
 ) -> dict:
     """Calculates agent performance metrics strictly for the signed-in agent."""
-    filters = build_date_filters(
-        date_range, start_date, end_date, [Ticket.assigned_agent_id == current_user.id]
+    agent_dept_filter = (
+        [Ticket.assigned_agent_id == current_user.id, Ticket.department_id == current_user.department_id]
+        if current_user.department_id
+        else [Ticket.assigned_agent_id == current_user.id]
     )
+    filters = build_date_filters(date_range, start_date, end_date, agent_dept_filter)
+
 
     total_query = select(sa_func.count()).select_from(Ticket).where(*filters)
     total_tickets = (await db.execute(total_query)).scalar() or 0
