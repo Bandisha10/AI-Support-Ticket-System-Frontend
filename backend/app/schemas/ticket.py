@@ -62,6 +62,8 @@ class TicketRead(BaseModel):
     body_redacted: str
     classification_confidence: Decimal | None
     sla_due_at: datetime | None = None
+    rating: int | None = None
+    feedback: str | None = None
     attachments: list[AttachmentRead] = []
     created_at: datetime
     updated_at: datetime

@@ -51,6 +51,11 @@ export default function CustomerTicketDetail() {
 
   // Check if user already rated this ticket
   useEffect(() => {
+    if (ticket?.rating) {
+      setHasRated(true);
+      setExistingRating({ rating: ticket.rating, feedback: ticket.feedback });
+      return;
+    }
     if (!ticketId) return;
     const stored = JSON.parse(
       localStorage.getItem("deskwise_ticket_ratings") || "{}",

@@ -54,6 +54,8 @@ def ticket_to_read(
     customer_email: str | None,
     sla_due_at=None,
     attachments: list[AttachmentRead] | None = None,
+    rating: int | None = None,
+    feedback: str | None = None
 ) -> TicketRead:
     """Constructs a TicketRead response object."""
     return TicketRead(
@@ -69,6 +71,8 @@ def ticket_to_read(
         body_redacted=ticket.body_redacted,
         classification_confidence=ticket.classification_confidence,
         sla_due_at=sla_due_at,
+        rating=rating,
+        feedback=feedback,
         attachments=attachments or [],
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
@@ -476,9 +480,16 @@ async def list_tickets_workflow(
 ) -> list[TicketRead]:
     """Builds filtered ticket queries according to user role, SLA status, and triage rules."""
     query = (
-        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
+        select(
+            Ticket,
+            User.email.label("customer_email"),
+            SLAState.resolution_due_at,
+            TicketRating.rating,
+            TicketRating.feedback,
+        )
         .outerjoin(User, Ticket.customer_id == User.id)
         .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
+        .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
     )
 
     if sla_status:
@@ -644,8 +655,8 @@ async def list_tickets_workflow(
     rows = result.all()
 
     return [
-        ticket_to_read(ticket, customer_email, sla_due_at)
-        for ticket, customer_email, sla_due_at in rows
+        ticket_to_read(ticket, customer_email, sla_due_at, rating=r_val, feedback=f_val)
+       for ticket, customer_email, sla_due_at, r_val, f_val in rows
     ]
 
 
@@ -656,9 +667,16 @@ async def get_ticket_workflow(
 ) -> TicketRead:
     """Retrieves single ticket with SLA status and attachments, enforcing customer RBAC."""
     query = (
-        select(Ticket, User.email.label("customer_email"), SLAState.resolution_due_at)
+        select(
+            Ticket,
+            User.email.label("customer_email"),
+            SLAState.resolution_due_at,
+            TicketRating.rating,
+            TicketRating.feedback,
+        )
         .outerjoin(User, Ticket.customer_id == User.id)
         .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
+        .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
         .where(Ticket.id == ticket_id)
     )
     result = await db.execute(query)
@@ -666,7 +684,7 @@ async def get_ticket_workflow(
     if not row:
         raise HTTPException(404, "Ticket not found")
 
-    ticket, customer_email, sla_due_at = row
+    ticket, customer_email, sla_due_at, r_val, f_val = row
     if current_user.role == UserRole.customer and ticket.customer_id != current_user.id:
         raise HTTPException(403, "Not allowed")
     
@@ -681,7 +699,7 @@ async def get_ticket_workflow(
 
 
     attachments = await get_ticket_attachments(ticket.id, db)
-    return ticket_to_read(ticket, customer_email, sla_due_at, attachments)
+    return ticket_to_read(ticket, customer_email, sla_due_at, attachments, rating=r_val, feedback=f_val)
 
 
 async def rate_ticket_workflow(

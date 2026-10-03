@@ -54,16 +54,23 @@ async def create_reply_workflow(
             or (current_user.department_id is None)
             or (ticket.department_id == current_user.department_id)
         )
-        is_assigned = (ticket.assigned_agent_id is None) or (
-            ticket.assigned_agent_id == current_user.id
-        )
-        if not (is_in_dept or is_assigned):
-            raise HTTPException(403, "Ticket is not assigned to you or your department")
+        if not is_in_dept:
+            raise HTTPException(403, "Ticket is not assigned to your department")
+        if not payload.is_system_log:
+            if ticket.assigned_agent_id is None:
+                raise HTTPException(
+                    400,
+                    "This ticket is unassigned. Please click 'Take Ticket' before replying.",
+                )
+            if ticket.assigned_agent_id != current_user.id:                raise HTTPException(
+                    403,
+                    "You cannot reply to this ticket because it is not assigned to you.",
+                )
 
     data = payload.model_dump()
     data["author_id"] = current_user.id
-    if current_user.role in (UserRole.customer, UserRole.agent):
-        # Force-override: regular replies from customers and agents cannot be internal notes
+    if current_user.role == UserRole.customer:
+        # Customers cannot create internal notes or system logs
         data["is_system_log"] = False
 
     new_reply = await reply_crud.create(db, data)
