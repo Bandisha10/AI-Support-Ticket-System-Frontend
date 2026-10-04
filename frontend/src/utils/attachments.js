@@ -26,6 +26,8 @@ export function getAttachmentUrl(relativeOrFullUrl) {
     import.meta.env.VITE_API_URL ||
     import.meta.env.VITE_API_BASE_URL?.replace(/\/api\/?$/, "") ||
     "http://localhost:8000";
+
+
   const cleanBase = apiBase.replace(/\/+$/, "");
   const cleanPath = relativeOrFullUrl.startsWith("/")
     ? relativeOrFullUrl

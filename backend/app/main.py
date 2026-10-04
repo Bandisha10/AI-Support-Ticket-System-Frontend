@@ -8,7 +8,6 @@ import math
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -164,26 +163,15 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# API v1 Router Registration
+# API Router Registrations
 # ---------------------------------------------------------------------------
-api_v1 = APIRouter(prefix="/api/v1")
-api_v1.include_router(auth.router)
-api_v1.include_router(departments.router)
-api_v1.include_router(users.router)
-api_v1.include_router(tickets.router)
-api_v1.include_router(sla_policies.router)
-api_v1.include_router(replies.router)
+app.include_router(auth.router)
+app.include_router(departments.router)
+app.include_router(users.router)
+app.include_router(tickets.router)
+app.include_router(sla_policies.router)
+app.include_router(replies.router)
 
-# Mount primary versioned API
-app.include_router(api_v1)
-
-# Backward Compatibility: Mount legacy unversioned routes hidden from Swagger docs
-app.include_router(auth.router, include_in_schema=False)
-app.include_router(departments.router, include_in_schema=False)
-app.include_router(users.router, include_in_schema=False)
-app.include_router(tickets.router, include_in_schema=False)
-app.include_router(sla_policies.router, include_in_schema=False)
-app.include_router(replies.router, include_in_schema=False)
 
 
 
