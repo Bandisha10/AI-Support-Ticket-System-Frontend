@@ -139,8 +139,12 @@ export default function TicketDetail() {
   useEffect(() => {
     if (!ticketId) return;
     loadReplies();
+    // 10s background polling fallback in case WebSockets are firewalled
+    const interval = setInterval(() => {
+      loadReplies();
+    }, 10000);
+    return () => clearInterval(interval);
   }, [ticketId]);
-
   async function loadReplies() {
     try {
       const data = await ticketService.getTicketReplies(ticketId);
@@ -151,14 +155,18 @@ export default function TicketDetail() {
       setRepliesLoading(false);
     }
   }
-
-  const handleNewReply = useCallback((newReply) => {
-    setReplies((prev) => {
-      if (prev.some((r) => r.id === newReply.id)) return prev;
-      return [...prev, newReply];
-    });
-  }, []);
-
+  const handleNewReply = useCallback(
+    (newReply) => {
+      setReplies((prev) => {
+        if (prev.some((r) => r.id === newReply.id)) return prev;
+        return [...prev, newReply];
+      });
+      // Immediately pull complete author emails and update ticket state
+      loadReplies();
+      refetch();
+    },
+    [ticketId],
+  );
   useReplyRealtime(ticketId, handleNewReply);
 
   async function handleStatusChange(e) {
