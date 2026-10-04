@@ -374,10 +374,6 @@ export default function AgentAnalytics() {
           <h2 className="text-[28px] font-bold mt-2">
             {data.total_tickets?.toLocaleString() || 0}
           </h2>
-          <p className="text-[11px] text-gray-400 mt-1">
-            {data.active_count || 0} active •{" "}
-            {(data.resolved_count || 0) + (data.closed_count || 0)} resolved
-          </p>
         </div>
 
         <div className="bg-[#181b26] border border-[#232632] rounded-[16px] p-5">
@@ -504,13 +500,11 @@ export default function AgentAnalytics() {
                     ? ((p.count / data.total_tickets) * 100).toFixed(1)
                     : "0.0";
                 const barColor =
-                  p.name === "urgent"
+                  p.name === "high"
                     ? "bg-red-500"
-                    : p.name === "high"
+                    : p.name === "medium"
                       ? "bg-amber-500"
-                      : p.name === "medium"
-                        ? "bg-blue-500"
-                        : "bg-gray-500";
+                      : "bg-gray-500";
 
                 return (
                   <div key={p.name} className="space-y-1.5">
