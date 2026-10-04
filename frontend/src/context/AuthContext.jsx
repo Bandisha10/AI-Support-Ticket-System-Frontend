@@ -43,19 +43,31 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    // 1) exchange credentials for tokens
-    const { access_token, refresh_token } = await authService.login(
-      email,
-      password,
-    );
+    // 1) exchange credentials for tokens and initial user payload
+    const loginData = await authService.login(email, password);
+    const { access_token, refresh_token, user: rawUser } = loginData;
     localStorage.setItem("access_token", access_token);
     if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
-    // 2) role + must_change_password live in public.users -> fetch /auth/me
-    //    (/auth/me is exempt from the forced-password-change block)
-    const profile = withDisplayName(await authService.fetchCurrentUser());
-    localStorage.setItem("user", JSON.stringify(profile));
-    setUser(profile);
-    return profile; // Login.jsx reads profile.role / profile.must_change_password
+
+    // Seed session state immediately from login payload
+    if (rawUser) {
+      const initialProfile = withDisplayName(rawUser);
+      setUser(initialProfile);
+      localStorage.setItem("user", JSON.stringify(initialProfile));
+    }
+
+    // 2) fetch comprehensive user profile from /auth/me
+    try {
+      const profile = withDisplayName(await authService.fetchCurrentUser());
+      localStorage.setItem("user", JSON.stringify(profile));
+      setUser(profile);
+      return profile;
+    } catch (err) {
+      if (rawUser) {
+        return withDisplayName(rawUser);
+      }
+      throw err;
+    }
   }
 
   async function logout() {

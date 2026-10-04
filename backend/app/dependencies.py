@@ -223,11 +223,11 @@ async def get_current_user(
             status.HTTP_403_FORBIDDEN, "This account has been temporarily deactivated."
         )
 
-    # Enforce temporary password change for newly invited staff/agents
+        # Enforce temporary password change for newly invited staff/agents
     if (
         settings.ENFORCE_PASSWORD_CHANGE
         and getattr(user, "must_change_password", False)
-        and request.url.path not in PASSWORD_CHANGE_EXEMPT_PATHS
+        and request.url.path.rstrip("/") not in PASSWORD_CHANGE_EXEMPT_PATHS
     ):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
