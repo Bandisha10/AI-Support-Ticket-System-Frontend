@@ -17,6 +17,7 @@ from backend.app.models.ticket import Ticket
 from backend.app.models.ticket_rating import TicketRating
 from backend.app.models.reply import Reply
 from backend.app.models.user import User
+from backend.app.models.sla_state import SLAState
 
 
 analytics_cache = TTLCache(maxsize=100, ttl=60)
@@ -361,19 +362,21 @@ async def get_dashboard_analytics(
     if target_dept_id:
         recent_where.append(Ticket.department_id == target_dept_id)
 
+    resolved_ts = sa_func.coalesce(SLAState.resolved_at, Ticket.updated_at)
     recent_query = (
         select(
             Ticket.id,
             Ticket.subject,
             Ticket.status,
-            Ticket.updated_at,
+            resolved_ts,
             TicketRating.rating,
             TicketRating.feedback,
         )
         .select_from(Ticket)
         .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
+        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
         .where(*recent_where)
-        .order_by(Ticket.updated_at.desc())
+        .order_by(resolved_ts.desc())
         .limit(5)
     )
     recent_rows = (await db.execute(recent_query)).all()
@@ -534,24 +537,27 @@ async def get_agent_analytics(
         else 0.0
     )
 
+    agent_resolved_ts = sa_func.coalesce(SLAState.resolved_at, Ticket.updated_at)
     recent_query = (
         select(
             Ticket.id,
             Ticket.subject,
             Ticket.status,
-            Ticket.updated_at,
+            agent_resolved_ts,
             TicketRating.rating,
             TicketRating.feedback,
         )
         .select_from(Ticket)
         .outerjoin(TicketRating, TicketRating.ticket_id == Ticket.id)
+        .outerjoin(SLAState, SLAState.ticket_id == Ticket.id)
         .where(
             Ticket.assigned_agent_id == current_user.id,
             Ticket.status.in_([TicketStatus.resolved, TicketStatus.closed]),
         )
-        .order_by(Ticket.updated_at.desc())
+        .order_by(agent_resolved_ts.desc())
         .limit(5)
     )
+    
     recent_rows = (await db.execute(recent_query)).all()
     recent_activity = [
         {
