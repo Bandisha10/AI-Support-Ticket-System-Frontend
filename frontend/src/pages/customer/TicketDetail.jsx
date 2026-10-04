@@ -57,7 +57,6 @@ export default function CustomerTicketDetail() {
       markTicketViewed(ticketId);
     }
   }, [ticketId]);
-
   // Check if user already rated this ticket
   useEffect(() => {
     if (ticket?.rating) {
@@ -73,12 +72,15 @@ export default function CustomerTicketDetail() {
       setHasRated(true);
       setExistingRating(stored[ticketId]);
     }
-  }, [ticketId]);
-
-  // Fetch replies on mount
+  }, [ticketId, ticket?.rating, ticket?.feedback]);
   useEffect(() => {
     if (!ticketId) return;
     fetchReplies();
+    // 10s background polling fallback
+    const interval = setInterval(() => {
+      fetchReplies();
+    }, 10000);
+    return () => clearInterval(interval);
   }, [ticketId]);
 
   async function fetchReplies() {
@@ -91,14 +93,18 @@ export default function CustomerTicketDetail() {
       setRepliesLoading(false);
     }
   }
-
-  const handleNewReply = useCallback((newReply) => {
-    setReplies((prev) => {
-      if (prev.some((r) => r.id === newReply.id)) return prev;
-      return [...prev, newReply];
-    });
-  }, []);
-
+  const handleNewReply = useCallback(
+    (newReply) => {
+      setReplies((prev) => {
+        if (prev.some((r) => r.id === newReply.id)) return prev;
+        return [...prev, newReply];
+      });
+      // Immediately pull formatted reply and refresh customer reply permissions
+      fetchReplies();
+      refetch();
+    },
+    [ticketId],
+  );
   useReplyRealtime(ticketId, handleNewReply);
 
   // Check if at least one human support agent has posted a public reply

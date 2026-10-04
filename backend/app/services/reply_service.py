@@ -15,6 +15,7 @@ from backend.app.models.reply import Reply
 from backend.app.models.ticket import Ticket
 from backend.app.models.user import User
 from backend.app.schemas.reply import ReplyCreate, ReplyRead
+from backend.app.models.sla_state import SLAState
 
 reply_crud = CRUDBase(Reply)
 
@@ -76,6 +77,13 @@ async def create_reply_workflow(
 
     new_reply = await reply_crud.create(db, data)
     ticket.updated_at = datetime.now(timezone.utc)
+    # Record SLA first response timestamp on first non-system agent/admin reply
+    if not payload.is_system_log and current_user.role in (UserRole.agent, UserRole.admin):
+        sla_state = (
+            await db.execute(select(SLAState).where(SLAState.ticket_id == ticket.id))
+        ).scalar_one_or_none()
+        if sla_state and sla_state.first_response_at is None:
+            sla_state.first_response_at = datetime.now(timezone.utc)
     await db.commit()
     
     return ReplyRead(

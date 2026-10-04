@@ -436,6 +436,22 @@ async def update_ticket_workflow(
                 sentiment=_val(new_sentiment),
             )
 
+    # Record or reset SLA resolved_at based on status transitions
+    if "status" in updates:
+        new_status = updates["status"]
+        sla_state = (
+            await db.execute(select(SLAState).where(SLAState.ticket_id == obj.id))
+        ).scalar_one_or_none()
+        
+        if sla_state:
+            now_utc = datetime.now(timezone.utc)
+            # Ticket transitioning into resolved/closed
+            if new_status in (TicketStatus.resolved, TicketStatus.closed) and obj.status not in (TicketStatus.resolved, TicketStatus.closed):
+                if sla_state.resolved_at is None:
+                    sla_state.resolved_at = now_utc
+            # Ticket reopened
+            elif new_status in (TicketStatus.open, TicketStatus.in_progress) and obj.status in (TicketStatus.resolved, TicketStatus.closed):
+                sla_state.resolved_at = None
     updated = await ticket_crud.update(db, obj, updates)
 
     # Send the manager alert only after the change is saved, and never fail the request over it
