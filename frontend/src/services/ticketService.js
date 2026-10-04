@@ -17,24 +17,15 @@ export async function createTicket(payload, attachments = []) {
 
   const { data: ticket } = await api.post("/tickets/", body);
 
-  if (attachments && attachments.length > 0 && ticket?.id) {
+    if (attachments && attachments.length > 0 && ticket?.id) {
     try {
-      const formData = new FormData();
-      for (const item of attachments) {
-        const fileObj = item.file || item;
-        if (fileObj instanceof File || fileObj instanceof Blob) {
-          formData.append("files", fileObj);
-        }
-      }
-      const { data: uploadedFiles } = await api.post(
-        `/tickets/${ticket.id}/attachments`,
-        formData
-      );
+      const uploadedFiles = await uploadTicketAttachments(ticket.id, attachments);
       ticket.attachments = uploadedFiles;
     } catch (err) {
       console.warn("[ticketService] Failed to upload attachments:", err);
     }
   }
+
 
   return ticket;
 }
