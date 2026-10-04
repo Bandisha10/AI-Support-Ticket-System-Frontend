@@ -81,7 +81,9 @@ export default function AgentTicketPanel() {
   // Sync state changes with URL and localStorage
   const handleTabChange = (mode, scope = historyScope) => {
     setPanelMode(mode);
-    setCurrentPage(1);
+    if (mode === "all_dept" && scope) {
+      setHistoryScope(scope);
+    }
     localStorage.setItem("deskwise_agent_panel_tab", mode);
     setSearchParams(
       (prev) => {
@@ -91,19 +93,6 @@ export default function AgentTicketPanel() {
       },
       { replace: true },
     );
-    const p = {};
-    if (mode === "mine" || mode === "my") {
-      p.assigned_to_me = true;
-    } else if (mode === "unassigned") {
-      p.status = "open";
-      p.unassigned_only = true;
-    } else if (mode === "all_dept") {
-      p.is_history = true;
-      if (scope === "mine") {
-        p.assigned_to_me = true; // Filters only tickets individually solved by this manager/agent
-      }
-    }
-    fetchTickets(p);
   };
 
   const handleToggleEscalations = () => {

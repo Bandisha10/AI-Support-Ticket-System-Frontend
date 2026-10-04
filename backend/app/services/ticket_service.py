@@ -34,7 +34,6 @@ from backend.app.services.manager_service import get_active_department_manager
 from backend.app.services.storage_service import get_ticket_attachments
 from backend.app.models.ticket_rating import TicketRating
 from backend.app.schemas.ticket_rating import TicketRatingCreate, TicketRatingRead
-from backend.app.models.reply import Reply
 
 logger = logging.getLogger(__name__)
 ticket_crud = CRUDBase(Ticket)
@@ -738,12 +737,12 @@ async def get_ticket_workflow(
     
     if current_user.role == UserRole.agent:
         is_in_dept = (
-            current_user.department_id is not None
-            and ticket.department_id == current_user.department_id
+            ticket.department_id is None
+            or current_user.department_id is None
+            or ticket.department_id == current_user.department_id
         )
-        if not is_in_dept:
+        if not is_in_dept and ticket.assigned_agent_id != current_user.id:
             raise HTTPException(403, "Not allowed to view tickets outside your department")
-
 
 
     attachments = await get_ticket_attachments(ticket.id, db)

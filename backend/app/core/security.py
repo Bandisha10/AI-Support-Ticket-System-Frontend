@@ -15,7 +15,7 @@ from backend.app.config import settings
 AUDIENCE = "authenticated"
 
 # Supabase JWKS endpoint for asymmetric signing keys (ES256 / RS256)
-_JWKS_URL = f"{settings.SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+_JWKS_URL = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
 _JWKS_TTL_SECONDS = 600  # In-memory cache valid for 10 minutes
 _jwks_lock = threading.Lock()
 _jwks_cache: dict = {"keys": []}
@@ -98,24 +98,26 @@ def decode_supabase_jwt(token: str) -> dict:
     if header.get("alg") == "HS256":
         key, allowed = settings.SUPABASE_JWT_SECRET, ["HS256"]
     else:
-        # Match Key ID ('kid') against cached JWKS
-        kid = header.get("kid")
-        jwks = _get_jwks()
-        raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
-        
-        # If kid not found, force a refresh once in case key rotation occurred
-        if raw_key is None:
-            jwks = _get_jwks(force=True)
-            raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
-        if raw_key is None:
-            raise TokenInvalidError(f"no JWK matches token kid={kid!r}")
-
         try:
+            kid = header.get("kid")
+            jwks = _get_jwks()
+            raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
+            
+            # If kid not found, force a refresh once in case key rotation occurred
+            if raw_key is None:
+                jwks = _get_jwks(force=True)
+                raw_key = next((k for k in jwks["keys"] if k.get("kid") == kid), None)
+            if raw_key is None:
+                raise TokenInvalidError(f"no JWK matches token kid={kid!r}")
+
             key = jwt.PyJWK.from_dict(raw_key).key
+        except TokenInvalidError:
+            raise
         except Exception as exc:
-            raise TokenInvalidError(f"invalid JWK: {exc}") from exc
+            raise TokenInvalidError(f"Failed to fetch Supabase JWKS signing keys: {exc}") from exc
 
         allowed = ["ES256", "RS256"]
+
 
     try:
         claims = jwt.decode(
