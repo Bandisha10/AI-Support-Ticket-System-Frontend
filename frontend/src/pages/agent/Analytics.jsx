@@ -367,7 +367,7 @@ export default function AgentAnalytics() {
         <div className="bg-[#181b26] border border-[#232632] rounded-[16px] p-5">
           <div className="flex items-center justify-between text-[#9ca3af]">
             <p className="text-[11px] font-semibold tracking-wider uppercase">
-              Assigned Tickets
+              Total Workload
             </p>
             <Inbox className="h-4 w-4 text-[#f2b705]" />
           </div>
@@ -375,7 +375,8 @@ export default function AgentAnalytics() {
             {data.total_tickets?.toLocaleString() || 0}
           </h2>
           <p className="text-[11px] text-gray-400 mt-1">
-            {data.active_count || 0} tickets currently active
+            {data.active_count || 0} active •{" "}
+            {(data.resolved_count || 0) + (data.closed_count || 0)} resolved
           </p>
         </div>
 
