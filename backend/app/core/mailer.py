@@ -700,7 +700,7 @@ def send_manager_sla_breach_warning_email(
         )
 
     greeting = f"Hello {manager_name}," if manager_name else "Hello Department Manager,"
-    portal_url = f"{settings.FRONTEND_URL}/agent/tickets/{ticket_id}"
+    portal_url = f"{settings.FRONTEND_URL.rstrip('/')}/agent/tickets/{ticket_id}"
     priority_color = "#ef4444" if str(priority).lower() == "high" else "#f59e0b"
 
     table_rows = [

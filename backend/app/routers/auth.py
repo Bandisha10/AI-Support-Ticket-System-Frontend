@@ -43,17 +43,18 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         httponly=True,
         secure=settings.FORCE_HTTPS or settings.FRONTEND_URL.startswith("https"),
         samesite="lax",
-        path="/auth/refresh",
+        path="/",
         max_age=30 * 24 * 3600,  # 30 days
     )
 
 def _delete_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         key="refresh_token",
-        path="/auth/refresh",
+        path="/",
         httponly=True,
         samesite="lax",
     )
+
 
 @router.post("/signup", status_code=201)
 @limiter.limit("10/hour")

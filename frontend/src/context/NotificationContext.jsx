@@ -21,8 +21,9 @@ export function NotificationProvider({ children }) {
 
   // 1. Isolate notifications per user account (prevents cross-role data leaks)
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || user?.must_change_password) return;
     let isMounted = true;
+
     async function checkTicketUpdates() {
       try {
         const tickets =
@@ -85,8 +86,7 @@ export function NotificationProvider({ children }) {
 
   // 2. Polling every 30 seconds to diff tickets and detect updates
   useEffect(() => {
-    if (!user?.id) return;
-
+    if (!user?.id || user?.must_change_password) return;
     let isMounted = true;
 
     async function checkTicketUpdates() {
