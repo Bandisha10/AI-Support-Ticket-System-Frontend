@@ -217,17 +217,17 @@ async def get_dashboard_analytics(
         {"name": "low", "count": priority_counts.get("low", 0)},
     ]
 
-
-    # 3. Department Breakdown
+    # 3. Department Breakdown (LEFT JOIN to include NULL-department tickets)
     dept_query = (
         select(Department.name, sa_func.count())
         .select_from(Ticket)
-        .join(Department, Ticket.department_id == Department.id)
+        .outerjoin(Department, Ticket.department_id == Department.id)
         .where(*filters)
         .group_by(Department.name)
     )
     dept_rows = (await db.execute(dept_query)).all()
-    tickets_by_category = [{"name": r[0], "count": r[1]} for r in dept_rows]
+    tickets_by_category = [{"name": r[0] or "Unclassified", "count": r[1]} for r in dept_rows]
+
 
     # 4. CSAT (Average Rating & Count)
     csat_query = (
@@ -512,18 +512,19 @@ async def get_agent_analytics(
     dept_query = (
         select(Department.name, sa_func.count())
         .select_from(Ticket)
-        .join(Department, Ticket.department_id == Department.id)
+        .outerjoin(Department, Ticket.department_id == Department.id)
         .where(*filters)
         .group_by(Department.name)
     )
     dept_rows = (await db.execute(dept_query)).all()
-    tickets_by_category = [{"name": r[0], "count": r[1]} for r in dept_rows]
+    tickets_by_category = [{"name": r[0] or "Unclassified", "count": r[1]} for r in dept_rows]
+
 
     csat_query = (
         select(sa_func.avg(TicketRating.rating), sa_func.count(TicketRating.id))
         .select_from(TicketRating)
         .join(Ticket, TicketRating.ticket_id == Ticket.id)
-        .where(Ticket.assigned_agent_id == current_user.id)
+        .where(Ticket.assigned_agent_id == current_user.id, *filters)
     )
     csat_res = (await db.execute(csat_query)).first()
     csat_val = csat_res[0] if csat_res else None
@@ -598,4 +599,3 @@ async def get_agent_analytics(
         "tickets_by_category": tickets_by_category,
         "recent_activity": recent_activity,
     }
-
