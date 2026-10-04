@@ -26,11 +26,17 @@ export function AuthProvider({ children }) {
   // Revalidate profile in background (stale-while-revalidate)
   useEffect(() => {
     const token = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
     if (!token) {
       setLoading(false);
       return;
     }
-
+    // Sync active session into Supabase client for Realtime & Storage
+    if (token && refreshToken) {
+      supabase.auth
+        .setSession({ access_token: token, refresh_token: refreshToken })
+        .catch(() => {});
+    }
     authService
       .fetchCurrentUser()
       .then((profile) => {
@@ -48,6 +54,12 @@ export function AuthProvider({ children }) {
     const { access_token, refresh_token, user: rawUser } = loginData;
     localStorage.setItem("access_token", access_token);
     if (refresh_token) localStorage.setItem("refresh_token", refresh_token);
+    // Sync session to Supabase client
+    if (access_token && refresh_token) {
+      await supabase.auth
+        .setSession({ access_token, refresh_token })
+        .catch(() => {});
+    }
 
     // Seed session state immediately from login payload
     if (rawUser) {
